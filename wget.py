@@ -500,11 +500,12 @@ class WGError(Exception):
 
     def log(self):
         info = OrderedDict()
-        if self.cause is not None:
+        if hasattr(self, 'cause') and self.cause is not None:
             info['Caused by'] = repr(self.cause)
-        if self.info is not None:
+        if hasattr(self, 'info') and self.info is not None:
             info.update(self.info)
-        self.logger.error(self.url, self.msg, info)
+        if hasattr(self, 'msg') and hasattr(self, 'url'):
+            self.logger.error(self.url, self.msg, info)
 
     def __str__(self):
         return repr(self)
