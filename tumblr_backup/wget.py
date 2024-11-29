@@ -20,7 +20,7 @@ from urllib3 import (BaseHTTPResponse, HTTPConnectionPool, HTTPHeaderDict, HTTPR
                      PoolManager, Retry as Retry, Timeout, make_headers)
 from urllib3.connection import HTTPConnection, HTTPSConnection, _url_from_connection  # noqa: WPS450
 from urllib3.exceptions import (ConnectTimeoutError, HeaderParsingError, HTTPError as HTTPError, InsecureRequestWarning,
-                                MaxRetryError, PoolError)
+                                MaxRetryError, PoolError, NameResolutionError)
 from urllib3.util.response import assert_header_parsing
 
 from .util import LogLevel, enospc, fsync, is_dns_working, no_internet, opendir, setup_urllib3_ssl, try_unlink
@@ -690,7 +690,7 @@ def _retrieve_loop(
         except HTTPError as e:
             if isinstance(e, ConnectTimeoutError):
                 # Host is unreachable (incl ETIMEDOUT, EHOSTUNREACH, and EAI_NONAME) - condemn it and don't retry
-                conn = e.pool if isinstance(e, PoolError) else e.args[0]
+                conn = e.pool if isinstance(e, PoolError) else e.conn if isinstance(e, NameResolutionError) else e.args[0]
                 hostname = normalized_host(None, conn.host, conn.port)
                 unreachable_hosts.add(hostname)
                 msg = 'Error connecting to host {}. From now on it will be ignored.'.format(hostname)
