@@ -5,6 +5,7 @@ import argparse
 import calendar
 import contextlib
 import errno
+import faulthandler
 import hashlib
 import http.client
 import itertools
@@ -140,6 +141,7 @@ disable_note_scraper: set[str] = set()
 disablens_lock = threading.Lock()
 downloading_media: set[str] = set()
 downloading_media_cond = threading.Condition()
+logfile = open('tumblr-backup-log.txt', 'w')
 
 
 def load_bs4(reason):
@@ -198,6 +200,7 @@ class Logger:
 
         pad = ' ' * (80 - len(msg))  # Pad to 80 chars
         print(msg + pad + term, end='', file=self.file)
+        print((msg + term).replace('\r', '\n'), end='', file=logfile)
 
 
 logger = Logger()
@@ -1434,6 +1437,8 @@ class TumblrBackup:
         if backup_pool.errors:
             self.postfail_blogs.append(account)
 
+        faulthandler.cancel_dump_traceback_later()
+
         # postprocessing
         if not self.options.blosxom and self.post_count:
             build_index()
@@ -1918,6 +1923,9 @@ class TumblrPost:
 
     def save_post(self):
         """saves this post locally"""
+        tid = threading.current_thread().ident
+        logger.error(f'backing up post {self.ident} in thread {tid:#016x}\n')
+        faulthandler.dump_traceback_later(5*60, file=logfile)
         if self.options.json and not self.options.reuse_json:
             with open_text(json_dir, self.ident + '.json') as f:
                 f.write(self.get_json_content())
