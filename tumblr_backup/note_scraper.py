@@ -16,7 +16,7 @@ from requests.exceptions import RequestException
 from urllib3 import Retry, Timeout
 from urllib3.exceptions import HTTPError, InsecureRequestWarning
 
-from .util import ConnectionFile, LogLevel, is_dns_working, make_requests_session, setup_urllib3_ssl, to_bytes
+from .util import LogLevel, is_dns_working, make_requests_session, setup_urllib3_ssl, to_bytes
 
 setup_urllib3_ssl()
 
@@ -219,7 +219,7 @@ class WebCrawler:
         return ''.join(notes_list)
 
 
-def main(stdout_conn, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check):
+def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check):
     global post_url, ident, msg_queue
     msg_queue, post_url, ident = msg_queue_, post_url_, ident_
 
@@ -248,5 +248,5 @@ def main(stdout_conn, msg_queue_, post_url_, ident_, noverify, user_agent, cooki
     finally:
         msg_queue._writer.close()  # type: ignore[attr-defined]
 
-    with ConnectionFile(stdout_conn, 'w') as stdout:
+    with open(stdout_fd, 'w') as stdout:
         print(notes, end='', file=stdout)

@@ -61,20 +61,6 @@ class LockedQueue(GenericQueue[T]):
         self.all_tasks_done = threading.Condition(lock)
 
 
-class ConnectionFile:
-    def __init__(self, conn, *args, **kwargs):
-        kwargs.setdefault('closefd', False)
-        self.conn = conn
-        self.file = open(conn.fileno(), *args, **kwargs)
-
-    def __enter__(self):
-        return self.file.__enter__()
-
-    def __exit__(self, *excinfo):
-        self.file.__exit__(*excinfo)
-        self.conn.close()
-
-
 KNOWN_GOOD_NAMESERVER = '8.8.8.8'
 # DNS query for 'A' record of 'google.com'.
 # Generated using python -c "import dnslib; print(bytes(dnslib.DNSRecord.question('google.com').pack()))"

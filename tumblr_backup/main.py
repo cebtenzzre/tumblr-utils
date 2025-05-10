@@ -42,8 +42,8 @@ import requests
 
 # internal modules
 from .is_reblog import post_is_reblog
-from .util import (AsyncCallable, ConnectionFile, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync,
-                   fsync, have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
+from .util import (AsyncCallable, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync, fsync,
+                   have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
 
 if TYPE_CHECKING:
@@ -1840,7 +1840,7 @@ class TumblrPost:
 
             # Scrape and save notes
             while True:
-                ns_stdout_rd, ns_stdout_wr = multiprocessing.Pipe(duplex=False)
+                ns_stdout_rd, ns_stdout_wr = os.pipe()
                 ns_msg_queue: SimpleQueue[tuple[LogLevel, str]] = multiprocessing.SimpleQueue()
                 try:
                     args = (
@@ -1851,11 +1851,11 @@ class TumblrPost:
                     process = multiprocessing.Process(target=note_scraper.main, args=args)
                     process.start()
                 except:
-                    ns_stdout_rd.close()
+                    os.close(ns_stdout_rd)
                     ns_msg_queue._reader.close()  # type: ignore[attr-defined]
                     raise
                 finally:
-                    ns_stdout_wr.close()
+                    os.close(ns_stdout_wr)
                     ns_msg_queue._writer.close()  # type: ignore[attr-defined]
 
                 try:
@@ -1868,7 +1868,7 @@ class TumblrPost:
                     finally:
                         ns_msg_queue.close()  # type: ignore[attr-defined]
 
-                    with ConnectionFile(ns_stdout_rd) as stdout:
+                    with open(ns_stdout_rd) as stdout:
                         notes_html = stdout.read()
 
                     process.join()
