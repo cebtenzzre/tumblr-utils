@@ -335,10 +335,6 @@ posts matching all criteria will be backed up.
 All options use only public Tumblr APIs, so you can use the program to backup
 blogs that you don’t own.
 
-tumblr-backup is developed and tested on Linux and OS X. If you want to run it
-under Windows, I suggest to try the excellent [Cygwin](http://cygwin.com)
-environment.
-
 
 ## 4. Changelog
 
