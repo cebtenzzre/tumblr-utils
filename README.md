@@ -38,23 +38,47 @@ You can see an example of its output [on my home page](http://drbeat.li/tumblr).
 5. Run `tumblr-backup blog-name` as often as you like manually or from a cron
    job.
 
-There are several optional dependencies that enable additional features:
+There are several optional extras that enable additional features:
 
-1. To backup audio and video, install `tumblr-backup[video]`, or you can
-   manually install either yt-dlp or youtube\_dl. If you need HTTP cookies to
-   download, use an appropriate browser plugin to extract the cookie(s) into a
-   file and use option `--cookiefile=file`. See
-   [issue 132](https://github.com/bbolli/tumblr-utils/issues/132).
-2. To enable EXIF tagging, install `tumblr-backup[exif]`, or you can manually
-   install py3exiv2.
-3. To back up notes with the --save-notes option, install
-   `tumblr-backup[bs4]`, or you can manually install beautifulsoup4 and lxml.
-4. To use the -F/--filter option to filter the downloaded posts with arbitrary
-   rules based on their metadata, install `tumblr-backup[jq]`. Alternatively,
-   you can manually install the [jq](https://github.com/mwilliamson/jq.py)
-   module.
-5. To install tumblr-backup with all optional features available, use
-   `pip install tumblr-backup[all]`.
+1. The `video` extra enables the `--save-video` and `--save-video-tumblr` options, which
+   download videos using yt-dlp. If you need HTTP cookies to download, use an appropriate
+   browser plugin to extract the cookie(s) into a file and use option `--cookiefile=file`.
+   See [issue 132].
+2. The `exif` extra enables the `--exif` option, which adds post tags to the EXIF metadata
+   of JPEG files. This pulls in the `py3exiv2` module which may have additional
+   prerequites depending on your platform. See the below section on installing py3exiv2.
+3. The `bs4` extra enables the `--save-notes` option, which saves the list of accounts
+   that reblogged or liked a public post.
+4. The `jq` extra enables the `--filter` option to filter the downloaded posts with arbitrary
+   rules based on their metadata.
+5. The `all` extra includes all of the above features.
+
+To install one or more extras, put them in square brackets after the package name in the
+pip command. Multiple extras may be separated by commas. Make sure to quote the command
+properly, as square brackets have a special meaning in many environments when not quoted.
+
+For example:
+```
+pip install 'tumblr-backup[video,bs4]'
+```
+
+[issue 132]: (https://github.com/bbolli/tumblr-utils/issues/132)
+
+
+### 1a. Notes About py3exiv2
+
+`py3exiv2` is not a pure Python package, and requires OS-specific dependencies. If you
+would like to install the `exif` or `all` extras, you may need to install additional
+dependencies for the `pip install` command to succeed.
+
+For example, on macOS, these steps successfully install the `exif` extra (requires [Homebrew]):
+[Homebrew]: https://brew.sh/
+```
+brew install boost-python3 exiv2
+export CPATH=/opt/homebrew/include
+export LIBRARY_PATH=/opt/homebrew/lib
+pip install 'tumblr-backup[exif]'
+```
 
 
 ## 2. Usage
