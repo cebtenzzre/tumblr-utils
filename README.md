@@ -29,12 +29,13 @@ You can see an example of its output [on my home page](http://drbeat.li/tumblr).
 
 ## 1. Installation
 
-1. `pip install tumblr-backup`
-2. Create an "app" at https://www.tumblr.com/oauth/apps. Follow the instructions
+1. Install the latest Python 3.
+2. Run `pip install tumblr-backup` from a command line.
+3. Create an "app" at https://www.tumblr.com/oauth/apps. Follow the instructions
    there; most values entered don't matter.
-3. `tumblr-backup --set-api-key API_KEY`, where API\_KEY is the OAuth Consumer
+4. Run `tumblr-backup --set-api-key API_KEY`, where API\_KEY is the OAuth Consumer
    Token from the app created in the previous step.
-4. Run `tumblr-backup blog-name` as often as you like manually or from a cron
+5. Run `tumblr-backup blog-name` as often as you like manually or from a cron
    job.
 
 There are several optional dependencies that enable additional features:
