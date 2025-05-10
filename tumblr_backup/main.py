@@ -20,8 +20,9 @@ import textwrap
 import threading
 import time
 import traceback
-from argparse import Namespace
+from argparse import ArgumentParser, Namespace
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from multiprocessing.queues import SimpleQueue
@@ -1310,7 +1311,7 @@ class TumblrBackup:
                     if post.typ not in request_sets:
                         continue
                     tags = request_sets[post.typ]
-                    if not (TAG_ANY in tags or tags & {t.lower() for t in post.tags}):
+                    if not (TAG_ANY in tags or any(t.casefold() in tags for t in post.tags)):
                         continue
                 if self.options.no_reblog and post_is_reblog(p):
                     continue
@@ -2119,6 +2120,85 @@ class ThreadPool:
             logger.status('Waiting for worker threads to finish\r')
 
 
+class CSVCallback(argparse.Action):
+    def __call__(self, parser: ArgumentParser, namespace: Namespace, values: str | Sequence[Any] | None,
+                 option_string: str | None = None) -> None:
+        assert isinstance(values, str)
+        setattr(namespace, self.dest, values.split(','))
+
+
+class RequestCallback(argparse.Action):
+    def __call__(self, parser: ArgumentParser, namespace: Namespace, values: str | Sequence[Any] | None,
+                 option_string: str | None = None) -> None:
+        assert isinstance(values, str)
+        request = self._get_option(namespace)
+        queries = values.split(',')
+        for req in queries:
+            typ, *tags =  req.strip().split(':')
+            self._set_request(parser, request, typ, tags, option_string)
+
+    def _get_option(self, namespace: Namespace) -> dict[str, list[str]]:
+        if (request := getattr(namespace, self.dest, None)) is None:
+            request = {}
+            setattr(namespace, self.dest, request)
+        return request
+
+    @classmethod
+    def _set_request(cls, parser: ArgumentParser, request: dict[str, list[str]], typ: str, tags: Iterable[str],
+                     option_string: str | None) -> None:
+        if typ not in [*POST_TYPES, TYPE_ANY]:
+            parser.error(f'{option_string}: invalid post type {typ!r}')
+        if typ == TYPE_ANY:
+            for typ in POST_TYPES:
+                cls._set_request(parser, request, typ, tags, option_string)
+            return
+
+        if tags:
+            request.setdefault(typ, []).extend(tags)
+        else:
+            request[typ] = [TAG_ANY]
+
+
+class TagsCallback(RequestCallback):
+    def __call__(self, parser: ArgumentParser, namespace: Namespace, values: str | Sequence[Any] | None,
+                 option_string: str | None = None):
+        assert isinstance(values, str)
+        request = self._get_option(namespace)
+        super()._set_request(parser, request, TYPE_ANY, values.split(','), option_string)
+
+
+class PeriodCallback(argparse.Action):
+    def __call__(self, parser: ArgumentParser, namespace: Namespace, values: str | Sequence[Any] | None,
+                 option_string: str | None = None) -> None:
+        assert isinstance(values, str)
+        try:
+            pformat = {'y': '%Y', 'm': '%Y%m', 'd': '%Y%m%d'}[values]
+        except KeyError:
+            periods = values.replace('-', '').split(',')
+            if not all(re.match(r'\d{4}(\d\d)?(\d\d)?Z?$', p) for p in periods):
+                parser.error("Period must be 'y', 'm', 'd' or YYYY[MM[DD]][Z]")
+            if not (1 <= len(periods) < 3):
+                parser.error('Period must have either one year/month/day or a start and end')
+            prange = parse_period_date(periods.pop(0))
+            if periods:
+                prange[1] = parse_period_date(periods.pop(0))[0]
+        else:
+            period = time.strftime(pformat)
+            prange = parse_period_date(period)
+        setattr(namespace, self.dest, prange)
+
+
+class IdFileCallback(argparse.Action):
+    def __call__(self, parser: ArgumentParser, namespace: Namespace, values: str | Sequence[Any] | None,
+                 option_string: str | None = None) -> None:
+        assert isinstance(values, str)
+        with open(values) as f:
+            lines = (l.rstrip('\n') for l in f)
+            setattr(namespace, self.dest, sorted(
+                (int(line) for line in lines if line), reverse=True,
+            ))
+
+
 def main():
     global wget_retrieve
 
@@ -2170,62 +2250,8 @@ def main():
     no_internet.setup(main_thread_lock)
     enospc.setup(main_thread_lock)
 
-    class CSVCallback(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            setattr(namespace, self.dest, list(values.split(',')))
-
-    class RequestCallback(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            request = getattr(namespace, self.dest) or {}
-            for req in values.lower().split(','):
-                parts = req.strip().split(':')
-                typ = parts.pop(0)
-                if typ != TYPE_ANY and typ not in POST_TYPES:
-                    parser.error("{}: invalid post type '{}'".format(option_string, typ))
-                types = POST_TYPES if typ == TYPE_ANY else (typ,)
-                for typ in types:
-                    if not parts:
-                        request[typ] = [TAG_ANY]
-                        continue
-                    if typ not in request:
-                        request[typ] = []
-                    request[typ].extend(parts)
-            setattr(namespace, self.dest, request)
-
-    class TagsCallback(RequestCallback):
-        def __call__(self, parser, namespace, values, option_string=None):
-            super().__call__(
-                parser, namespace, TYPE_ANY + ':' + values.replace(',', ':'), option_string,
-            )
-
-    class PeriodCallback(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            try:
-                pformat = {'y': '%Y', 'm': '%Y%m', 'd': '%Y%m%d'}[values]
-            except KeyError:
-                periods = values.replace('-', '').split(',')
-                if not all(re.match(r'\d{4}(\d\d)?(\d\d)?Z?$', p) for p in periods):
-                    parser.error("Period must be 'y', 'm', 'd' or YYYY[MM[DD]][Z]")
-                if not (1 <= len(periods) < 3):
-                    parser.error('Period must have either one year/month/day or a start and end')
-                prange = parse_period_date(periods.pop(0))
-                if periods:
-                    prange[1] = parse_period_date(periods.pop(0))[0]
-            else:
-                period = time.strftime(pformat)
-                prange = parse_period_date(period)
-            setattr(namespace, self.dest, prange)
-
-    class IdFileCallback(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            with open(values) as f:
-                lines = (l.rstrip('\n') for l in f)
-                setattr(namespace, self.dest, sorted(
-                    (int(line) for line in lines if line), reverse=True,
-                ))
-
-    parser = argparse.ArgumentParser(usage='%(prog)s [options] blog-name ...',
-                                     description='Makes a local backup of Tumblr blogs.')
+    parser = ArgumentParser(usage='%(prog)s [options] blog-name ...',
+                            description='Makes a local backup of Tumblr blogs.')
     postexist_group = parser.add_mutually_exclusive_group()
     reblog_group = parser.add_mutually_exclusive_group()
     parser.add_argument('-O', '--outdir', help='set the output directory (default: blog-name)')
