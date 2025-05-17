@@ -72,13 +72,14 @@ would like to install the `exif` or `all` extras, you may need to install additi
 dependencies for the `pip install` command to succeed.
 
 For example, on macOS, these steps successfully install the `exif` extra (requires [Homebrew]):
-[Homebrew]: https://brew.sh/
 ```
 brew install boost-python3 exiv2
 export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
 pip install 'tumblr-backup[exif]'
 ```
+
+[Homebrew]: https://brew.sh/
 
 
 ## 2. Usage
