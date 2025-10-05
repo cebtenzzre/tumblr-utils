@@ -366,7 +366,14 @@ blogs that you don’t own.
 See [here](https://github.com/cebtenzzre/tumblr-utils/commits).
 
 
-## 5. Acknowledgments
+## 5. Third-party components
+
+This project redistributes **npf2html** (MIT) from https://github.com/nex3/npf2html at commit `05d602a`.
+- Upstream license: see `3rdparty/npf2html/LICENSE`.
+- Source used to produce the bundled JS: `3rdparty/npf2html/` with build steps in `3rdparty/README.md`.
+
+
+## 6. Acknowledgments
 
 - [bdoms](https://github.com/bdoms/tumblr_backup) for the initial implementation
 - [WyohKnott](https://github.com/WyohKnott) for numerous bug reports and patches

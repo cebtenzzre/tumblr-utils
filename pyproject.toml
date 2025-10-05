@@ -4,8 +4,8 @@ version = "1.0.7"
 description = "An advanced tool for backing up Tumblr blogs."
 readme = "README.md"
 requires-python = ">=3.9"
+license = "GPL-3.0-only"
 classifiers = [
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.8",
@@ -57,6 +57,19 @@ tb-login = "tumblr_backup.login:main"
 [build-system]
 requires = ["setuptools>=43.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+license-files = [
+    "LICENSE",
+    "3rdparty/npf2html/LICENSE",
+]
+
+[tool.setuptools.package-data]
+tumblr_backup = [
+    "3rdparty/npf2html.iife.js",
+    "3rdparty/npf2html.iife.js.map",
+]
 
 [tool.mypy]
 files = 'tumblr_backup'

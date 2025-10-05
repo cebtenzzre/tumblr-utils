@@ -1,0 +1,3 @@
+[submodule "3rdparty/npf2html"]
+	path = 3rdparty/npf2html
+	url = https://github.com/nex3/npf2html.git
