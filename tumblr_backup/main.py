@@ -467,7 +467,7 @@ class ApiParser:
                 if len(errors) == 1 and errors[0].get('code') == 4012:
                     self.dashboard_only_blog = True
                     logger.info('Found dashboard-only blog, trying internal API\n', account=True)
-                    self.tb.get_npf_renderer(self.account)  # fail/warn fast if unavailable
+                    self._tb.get_npf_renderer(self.account)  # fail/warn fast if unavailable
                     return self.apiparse(count, start)  # Recurse once
             if status == 403 and self.options.likes:
                 logger.error('HTTP 403: Most likely {} does not have public likes.\n'.format(self.account))
@@ -959,14 +959,14 @@ class TumblrBackup:
         self.mlf_seen: set[int] = set()
         self.mlf_lock = threading.Lock()
 
-    def get_npf_renderer(self) -> NpfRenderer:
+    def get_npf_renderer(self, account: str) -> NpfRenderer:
         cls = type(self)
         if cls._npf_renderer is not None:
             return cls._npf_renderer
         renderer = create_npf_renderer()
         if renderer is None:
             logger.error(
-                f'Dashboard-only blog {self.account} requires a js engine for npf2html.\n'
+                f'Dashboard-only blog {account} requires a js engine for npf2html.\n'
                 'Try `pip install "tumblr-backup[dashboard]"`\n'
             )
             sys.exit(1)
@@ -1636,7 +1636,7 @@ class TumblrPost:
                 ):
                     # pop title into metadata
                     self.title = blocks_content.pop(0)['text']
-                renderer = self.tb.get_npf_renderer(self.account)
+                renderer = self.tb.get_npf_renderer(self.backup_account)
                 body = renderer(blocks_content)
                 post['body'] = body
                 post['content'] = body
