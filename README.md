@@ -51,7 +51,11 @@ There are several optional extras that enable additional features:
    that reblogged or liked a public post.
 4. The `jq` extra enables the `--filter` option to filter the downloaded posts with arbitrary
    rules based on their metadata.
-5. The `all` extra includes all of the above features.
+5. The `dashboard` extra enables backing up dashboard-only blogs by installing `quickjs` for
+   fast NPF (Neue Post Format) rendering. This is required for dashboard-only blogs. It pulls in `quickjs` by default.
+   `miniracer` is also supported, in case the `quickjs` package is not available - but it must be installed manually to
+   use it as a fallback (`pip install mini-racer`).
+6. The `all` extra includes all of the above features.
 
 To install one or more extras, put them in square brackets after the package name in the
 pip command. Multiple extras may be separated by commas. Make sure to quote the command
@@ -111,7 +115,7 @@ options:
                         --no-copy-notes)
   --notes-limit COUNT   limit requested notes to COUNT, per-post
   --cookiefile COOKIEFILE
-                        cookie file for youtube-dl, --save-notes, and svc API
+                        cookie file for youtube-dl, --save-notes, and dashboard-only blogs
   -j, --json            save the original JSON source
   -b, --blosxom         save the posts in blosxom format
   -r, --reverse-month   reverse the post order in the monthly archives

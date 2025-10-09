@@ -8,7 +8,6 @@ license = "GPL-3.0-only"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -18,15 +17,17 @@ dependencies = [
     "filetype~=1.2",
     "platformdirs~=4.2",
     "requests~=2.31",
+    "typing_extensions>=4.5.0,<5",
     "urllib3>=2.2.2,<3",
 ]
 
 [project.optional-dependencies]
 bs4 = ["beautifulsoup4~=4.12", "lxml~=5.1"]
+dashboard = ["quickjs~=1.19"]
 exif = ["py3exiv2~=0.12"]
 jq = ["jq~=1.6"]
 video = ["yt_dlp>=2023.12.30"]
-all = ["tumblr-backup[bs4,exif,jq,video]"]
+all = ["tumblr-backup[bs4,dashboard,exif,jq,video]"]
 dev = [
     "tumblr-backup[all]",
 
@@ -42,7 +43,6 @@ dev = [
     "types-beautifulsoup4~=4.12",
     "types-requests~=2.31",
     "youtube_dl>=2021.12.17",
-    "typing_extensions>=3.10.0.0,<5",
 ]
 
 [project.urls]
@@ -67,8 +67,8 @@ license-files = [
 
 [tool.setuptools.package-data]
 tumblr_backup = [
-    "3rdparty/npf2html.iife.js",
-    "3rdparty/npf2html.iife.js.map",
+    "assets/npf2html.iife.js",
+    "assets/npf2html.iife.js.map",
 ]
 
 [tool.mypy]

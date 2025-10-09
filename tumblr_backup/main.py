@@ -31,7 +31,7 @@ from pathlib import Path
 from posixpath import basename as urlbasename, join as urlpathjoin, splitext as urlsplitext
 from tempfile import NamedTemporaryFile
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Literal, TextIO, cast
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, ContextManager, Iterator, Literal, TextIO, cast
 from urllib.parse import quote, urlencode, urlparse
 from xml.sax.saxutils import escape
 
@@ -42,6 +42,7 @@ import requests
 
 # internal modules
 from .is_reblog import post_is_reblog
+from .render_npf import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .util import (AsyncCallable, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync, fsync,
                    have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
@@ -326,10 +327,10 @@ def get_posts_key(likes: bool) -> str:
 
 class ApiParser:
     TRY_LIMIT = 2
-    session: requests.Session | None = None
-    api_key: str | None = None
+    session: ClassVar[requests.Session | None] = None
+    api_key: ClassVar[str | None] = None
 
-    def __init__(self, account: str, options: Namespace):
+    def __init__(self, tb: TumblrBackup, account: str, options: Namespace):
         self.account = account
         self.options = options
         self.prev_resps: list[str] | None = None
@@ -337,6 +338,7 @@ class ApiParser:
         self._prev_iter: Iterator[JSONDict] | None = None
         self._last_mode: str | None = None
         self._last_offset: int | None = None
+        self._tb = tb
 
     @classmethod
     def setup(
@@ -464,7 +466,8 @@ class ApiParser:
                 errors = doc.get('errors', ())
                 if len(errors) == 1 and errors[0].get('code') == 4012:
                     self.dashboard_only_blog = True
-                    logger.info('Found dashboard-only blog, trying svc API\n', account=True)
+                    logger.info('Found dashboard-only blog, trying internal API\n', account=True)
+                    self.tb.get_npf_renderer(self.account)  # fail/warn fast if unavailable
                     return self.apiparse(count, start)  # Recurse once
             if status == 403 and self.options.likes:
                 logger.error('HTTP 403: Most likely {} does not have public likes.\n'.format(self.account))
@@ -938,6 +941,8 @@ class Indices:
 
 
 class TumblrBackup:
+    _npf_renderer: ClassVar[NpfRenderer | None] = None
+
     def __init__(self, options: Namespace, orig_options: dict[str, Any], get_arg_default: Callable[[str], Any]):
         self.options = options
         self.orig_options = orig_options
@@ -953,6 +958,22 @@ class TumblrBackup:
         self.media_list_file: TextIO | None = None
         self.mlf_seen: set[int] = set()
         self.mlf_lock = threading.Lock()
+
+    def get_npf_renderer(self) -> NpfRenderer:
+        cls = type(self)
+        if cls._npf_renderer is not None:
+            return cls._npf_renderer
+        renderer = create_npf_renderer()
+        if renderer is None:
+            logger.error(
+                f'Dashboard-only blog {self.account} requires a js engine for npf2html.\n'
+                'Try `pip install "tumblr-backup[dashboard]"`\n'
+            )
+            sys.exit(1)
+        if not isinstance(renderer, QuickJsNpfRenderer):
+            logger.info('note: using mini-racer for npf2html')
+        cls._npf_renderer = renderer
+        return renderer
 
     def exit_code(self):
         if self.failed_blogs or self.postfail_blogs:
@@ -1187,7 +1208,7 @@ class TumblrBackup:
 
         logger.status('Getting basic information\r')
 
-        api_parser = ApiParser(account, self.options)
+        api_parser = ApiParser(self, account, self.options)
         if not api_parser.read_archive(prev_archive):
             self.failed_blogs.append(account)
             return
@@ -1286,7 +1307,7 @@ class TumblrBackup:
             for p in sorted(posts, key=sort_key, reverse=True):
                 no_internet.check()
                 enospc.check()
-                post = post_class(p, self.options, account, prev_archive, self.pa_options, self.record_media)
+                post = post_class(self, p, account, prev_archive)
                 oldest_date = post.date
                 if before is not None and post.date >= before:
                     raise RuntimeError('Found post with date ({}) newer than before param ({})'.format(
@@ -1448,26 +1469,25 @@ class TumblrPost:
 
     def __init__(
         self,
+        tb: TumblrBackup,
         post: JSONDict,
-        options: Namespace,
         backup_account: str,
         prev_archive: str | None,
-        pa_options: JSONDict | None,
-        record_media: Callable[[int, set[str]], None],
     ) -> None:
+        self.tb = tb
         self.post = post
-        self.options = options
+        self.options = tb.options
         self.backup_account = backup_account
         self.prev_archive = prev_archive
-        self.pa_options = pa_options
-        self.record_media = record_media
+        self.pa_options = tb.pa_options
+        self.record_media = tb.record_media
         self.post_media: set[str] = set()
         self.creator = post.get('blog_name') or post['tumblelog']
         self.ident = str(post['id'])
         self.url = post['post_url']
         self.shorturl = post['short_url']
         self.typ = str(post['type'])
-        self.date: float = post['liked_timestamp' if options.likes else 'timestamp']
+        self.date: float = post['liked_timestamp' if tb.options.likes else 'timestamp']
         self.isodate = datetime.utcfromtimestamp(self.date).isoformat() + 'Z'
         self.tm = time.localtime(self.date)
         self.title = ''
@@ -1481,9 +1501,9 @@ class TumblrPost:
         self.reblogged_root = post.get('reblogged_root_url')
         self.source_title = post.get('source_title', '')
         self.source_url = post.get('source_url', '')
-        self.file_name = join(self.ident, dir_index) if options.dirs else self.ident + post_ext
-        self.llink = self.ident if options.dirs else self.file_name
-        self.media_dir = join(post_dir, self.ident) if options.dirs else media_dir
+        self.file_name = join(self.ident, dir_index) if tb.options.dirs else self.ident + post_ext
+        self.llink = self.ident if tb.options.dirs else self.file_name
+        self.media_dir = join(post_dir, self.ident) if tb.options.dirs else media_dir
         self.media_url = urlpathjoin(save_dir, self.media_dir)
         self.media_folder = path_to(self.media_dir)
 
@@ -1603,6 +1623,24 @@ class TumblrPost:
                 '<br>\n'.join('%(label)s %(phrase)s' % d for d in post['dialogue']),
                 '<p>%s</p>',
             )
+
+        elif self.typ == 'blocks':
+            if blocks_content := post.get('content'):
+                self.title = ''
+                def is_h1(block: JSONDict) -> bool:
+                    return block['type'] == 'text' and block.get('subtype') == 'heading1'
+                if (
+                    blocks_content
+                    and is_h1(blocks_content[0])
+                    and not any(is_h1(b) for b in blocks_content[1:])
+                ):
+                    # pop title into metadata
+                    self.title = blocks_content.pop(0)['text']
+                renderer = self.tb.get_npf_renderer(self.account)
+                body = renderer(blocks_content)
+                post['body'] = body
+                post['content'] = body
+                append_try('body')
 
         else:
             logger.warn("Unknown post type '{}' in post #{}\n".format(self.typ, self.ident))
@@ -2265,7 +2303,7 @@ def main():
     parser.add_argument('--no-copy-notes', action='store_false', default=None, dest='copy_notes',
                         help=argparse.SUPPRESS)
     parser.add_argument('--notes-limit', type=int, metavar='COUNT', help='limit requested notes to COUNT, per-post')
-    parser.add_argument('--cookiefile', help='cookie file for youtube-dl, --save-notes, and svc API')
+    parser.add_argument('--cookiefile', help='cookie file for youtube-dl, --save-notes, and internal API')
     parser.add_argument('-j', '--json', action='store_true', help='save the original JSON source')
     parser.add_argument('-b', '--blosxom', action='store_true', help='save the posts in blosxom format')
     parser.add_argument('-r', '--reverse-month', action='store_false',
