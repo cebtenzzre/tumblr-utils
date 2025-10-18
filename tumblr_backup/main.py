@@ -280,7 +280,7 @@ def get_dotted_blogname(account: str) -> str:
     return account + '.tumblr.com'
 
 
-def get_api_url(account: str, *, likes: bool, dash: bool) -> str:
+def get_api_url(account: str, *, likes: bool, dash: bool | None) -> str:
     """construct the tumblr API URL"""
     blog_name = account
     if any(c in account for c in '/\\') or account in ('.', '..'):
@@ -1939,12 +1939,11 @@ class TumblrPost:
         post += '\n</article>\n'
         return post
 
-    @staticmethod
-    def tag_link(tag):
+    def tag_link(self, tag):
         tag_disp = escape(TAG_FMT.format(tag))
         if not TAGLINK_FMT:
             return tag_disp + ' '
-        url = TAGLINK_FMT.format(domain=get_dotted_blogname(blog_name), tag=quote(to_bytes(tag)))
+        url = TAGLINK_FMT.format(domain=get_dotted_blogname(self.backup_account), tag=quote(to_bytes(tag)))
         return '<a href=%s>%s</a>\n' % (url, tag_disp)
 
     def get_path(self):
