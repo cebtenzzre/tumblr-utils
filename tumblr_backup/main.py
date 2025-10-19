@@ -31,7 +31,9 @@ from pathlib import Path
 from posixpath import basename as urlbasename, join as urlpathjoin, splitext as urlsplitext
 from tempfile import NamedTemporaryFile
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, ContextManager, Iterator, Literal, NamedTuple, TextIO, TypedDict, cast
+from typing import (
+    TYPE_CHECKING, Any, Callable, ClassVar, ContextManager, Iterator, Literal, NamedTuple, TextIO, TypedDict, cast
+)
 from urllib.parse import quote, urlencode, urlparse, urlunparse
 from xml.sax.saxutils import escape, quoteattr
 
@@ -42,7 +44,15 @@ import requests
 
 # internal modules
 from .is_reblog import post_is_reblog
-from .npf.models import Options as NpfOptions, _content_block_list_adapter
+from .npf.models import (
+    AudioBlock,
+    ContentBlockList,
+    ImageBlock,
+    Options as NpfOptions,
+    VideoBlock,
+    VisualMedia,
+    _content_block_list_adapter,
+)
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .util import (AsyncCallable, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync, fsync,
                    have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
@@ -1535,6 +1545,30 @@ class TumblrPost:
                                  self.get_inline_video, elt)
                 append(elt, fmt)
 
+        def maybe_try_get_media_url_video(tumblr_vid_url: str | None) -> str | None:
+            src = None
+            if (
+                (self.options.save_video or self.options.save_video_tumblr)
+                and tumblr_vid_url is not None
+            ):
+                src = self.get_media_url(tumblr_vid_url, '.mp4')
+            elif self.options.save_video:
+                src = self.get_youtube_url(self.url)
+                if not src:
+                    logger.warn('Unable to download video in post #{}\n'.format(self.ident))
+            return src
+
+        def try_get_media_url_tumblr_audio(audio_url: str) -> str | None:
+            src = None
+            if audio_url.startswith('https://a.tumblr.com/'):
+                # npf posts have "?play_key=...", strip it
+                audio_url = urlunparse(urlparse(audio_url)._replace(query=None))
+                src = self.get_media_url(audio_url, '.mp3')
+            elif audio_url.startswith('https://www.tumblr.com/audio_file/'):
+                audio_url = 'https://a.tumblr.com/{}o1.mp3'.format(urlbasename(urlparse(audio_url).path))
+                src = self.get_media_url(audio_url, '.mp3')
+            return src
+
         if self.typ == 'text':
             self.title = get_try('title')
             append_try('body')
@@ -1565,17 +1599,7 @@ class TumblrPost:
             append_try('source', '<p>%s</p>')
 
         elif self.typ == 'video':
-            src = ''
-            if (
-                (self.options.save_video or self.options.save_video_tumblr)
-                and post['video_type'] == 'tumblr'
-            ):
-                src = self.get_media_url(post['video_url'], '.mp4')
-            elif self.options.save_video:
-                src = self.get_youtube_url(self.url)
-                if not src:
-                    logger.warn('Unable to download video in post #{}\n'.format(self.ident))
-            if src:
+            if src := maybe_try_get_media_url_video(post['video_url'] if post['video_type'] == 'tumblr' else None):
                 append('<p><video controls><source src="%s" type=video/mp4>%s<br>\n<a href="%s">%s</a></video></p>' % (
                     src, 'Your browser does not support the video element.', src, 'Video file',
                 ))
@@ -1596,14 +1620,9 @@ class TumblrPost:
 
             src = None
             audio_url = get_try('audio_url') or get_try('audio_source_url')
-            # TODO(jared): implement this for blocks posts as well
             if self.options.save_audio:
                 if post['audio_type'] == 'tumblr':
-                    if audio_url.startswith('https://a.tumblr.com/'):
-                        src = self.get_media_url(audio_url, '.mp3')
-                    elif audio_url.startswith('https://www.tumblr.com/audio_file/'):
-                        audio_url = 'https://a.tumblr.com/{}o1.mp3'.format(urlbasename(urlparse(audio_url).path))
-                        src = self.get_media_url(audio_url, '.mp3')
+                    src = try_get_media_url_tumblr_audio(audio_url)
                 elif post['audio_type'] == 'soundcloud':
                     src = self.get_media_url(audio_url, '.mp3')
             player = get_try('player')
@@ -1627,6 +1646,26 @@ class TumblrPost:
             )
 
         elif self.typ == 'blocks':
+            def preprocess(blocks: ContentBlockList) -> ContentBlockList:
+                blocks = [b.model_copy(deep=True) for b in blocks]
+                is_photoset = sum(1 for b in blocks if isinstance(b, ImageBlock)) > 1
+                img_offset = 1
+                for block in blocks:
+                    match block:
+                        case ImageBlock():
+                            widest = max(block.media, key=lambda m: m.width)
+                            if self.options.save_images:
+                                widest.url = self.get_image_url(widest.url, img_offset if is_photoset else 0)
+                            block.media = [widest]
+                            img_offset += 1
+                        case VideoBlock(media=VisualMedia(url=video_url)):
+                            if src := maybe_try_get_media_url_video(video_url):
+                                block.media.url = src
+                        case AudioBlock(media=VisualMedia(url=audio_url)) if self.options.save_audio:
+                            if src := try_get_media_url_tumblr_audio(audio_url):
+                                block.media.url = src
+                return blocks
+
             renderer = self.tb.get_npf_renderer(self.backup_account)
             BlogInfo = TypedDict('BlogInfo', {'name': str, 'url': str}, total=False)
             TrailContent = NamedTuple('TrailContent', [('blog', BlogInfo), ('content', str), ('post_id', str)])
@@ -1634,7 +1673,7 @@ class TumblrPost:
                 TrailContent(
                     blog=p['blog'],
                     content=renderer(
-                        _content_block_list_adapter.validate_python(p['content']),
+                        preprocess(_content_block_list_adapter.validate_python(p['content'])),
                         NpfOptions(layout=p.get('layout', [])),
                     ),
                     post_id=pp['id'] if (pp := p.get('post')) else p['id'],
@@ -1642,9 +1681,8 @@ class TumblrPost:
             ]
 
             def with_post(url: str, post_id: str) -> str:
-                scheme, netloc, path, params, query, fragment = urlparse(url)
-                path = urlpathjoin(path, post_id)
-                return urlunparse((scheme, netloc, path, params, query, fragment))
+                parsed = urlparse(url)
+                return urlunparse(parsed._replace(path=urlpathjoin(parsed.path, post_id)))
 
             if rendered_content:
                 body = ''
@@ -1713,14 +1751,14 @@ class TumblrPost:
                 ydl.extract_info(youtube_url, download=True)
             except Exception:
                 return ''
-        return urlpathjoin(self.media_url, split(media_filename)[1])
+        return quote(urlpathjoin(self.media_url, split(media_filename)[1]))
 
     def get_media_url(self, media_url, extension):
         if not media_url:
             return ''
         saved_name = self.download_media(media_url, extension=extension)
         if saved_name is not None:
-            return urlpathjoin(self.media_url, saved_name)
+            return quote(urlpathjoin(self.media_url, saved_name))
         return media_url
 
     def get_image_url(self, image_url, offset):
@@ -1730,7 +1768,7 @@ class TumblrPost:
         if saved_name is not None:
             if self.options.exif and saved_name.endswith('.jpg'):
                 add_exif(join(self.media_folder, saved_name), set(self.tags), self.options.exif)
-            return urlpathjoin(self.media_url, saved_name)
+            return quote(urlpathjoin(self.media_url, saved_name))
         return image_url
 
     @staticmethod
@@ -1762,7 +1800,7 @@ class TumblrPost:
             return match.group(0)
         # get rid of autoplay and muted attributes to align with normal video
         # download behaviour
-        el = '%s%s/%s%s' % (match.group(1), self.media_url, saved_name, match.group(3))
+        el = '%s%s%s' % (match.group(1), quote(urlpathjoin(self.media_url, saved_name)), match.group(3))
         return el.replace('autoplay="autoplay"', '').replace('muted="muted"', '')
 
     def get_inline_video(self, match):
@@ -1788,8 +1826,7 @@ class TumblrPost:
             # Insert the query string to avoid ambiguity for certain URLs (e.g. SoundCloud embeds).
             query_sep = '@' if os.name == 'nt' else '?'
             if ext:
-                extwdot = '.{}'.format(ext)
-                fname = fname[:-len(extwdot)] + query_sep + parsed_url.query + extwdot
+                fname = fname[:-len(ext)] + query_sep + parsed_url.query + ext
             else:
                 fname = fname + query_sep + parsed_url.query
         if image_names == 'i':
