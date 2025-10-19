@@ -150,7 +150,6 @@ class WebCrawler:
 
     @staticmethod
     def get_more_link(soup, base, notes_url):
-        global ident
         element = cast(Tag, soup.find('a', class_='more_notes_link'))
         if not element:
             return None
@@ -224,7 +223,7 @@ def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookief
     msg_queue, post_url, ident = msg_queue_, post_url_, ident_
 
     assert msg_queue is not None
-    msg_queue._reader.close()  # type: ignore[attr-defined]
+    msg_queue._reader.close()  # type: ignore[union-attr]
 
     if noverify:
         # Hide the InsecureRequestWarning from urllib3
@@ -246,7 +245,7 @@ def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookief
             log(LogLevel.ERROR, crawler.lasturl, 'Caught an exception\n{}'.format(traceback.format_exc()))
             sys.exit()
     finally:
-        msg_queue._writer.close()  # type: ignore[attr-defined]
+        msg_queue._writer.close()  # type: ignore[union-attr]
 
     with open(stdout_fd, 'w') as stdout:
         print(notes, end='', file=stdout)
