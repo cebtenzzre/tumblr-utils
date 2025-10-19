@@ -463,7 +463,7 @@ class AudioBlock(BaseModel):
     The Media to use for the audio block. Either this, url, or
     both will always be set.
     """
-    media: list[Media] | None = None
+    media: Media | None = None
 
     """
     The provider of the audio source, whether it's tumblr for native audio or
