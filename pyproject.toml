@@ -16,6 +16,7 @@ classifiers = [
 dependencies = [
     "filetype~=1.2",
     "platformdirs~=4.2",
+    "pydantic>=2.12.3,<3",
     "requests~=2.31",
     "typing_extensions>=4.5.0,<5",
     "urllib3>=2.2.2,<3",

@@ -1,8 +1,14 @@
 import importlib.resources
 from abc import ABC, abstractmethod
-from typing import Any, Literal
+from typing import Literal
 
+from pydantic import TypeAdapter
 from typing_extensions import override
+
+from .models import ContentBlock, Options
+
+ContentBlockList = list[ContentBlock]
+_content_blocks_adapter = TypeAdapter(ContentBlockList)
 
 __all__ = [
     'MiniRacerNpfRenderer',
@@ -35,7 +41,7 @@ class NpfRenderer(ABC):
     def available(cls) -> bool: ...
 
     @abstractmethod
-    def __call__(self, content: list[dict[str, Any]]) -> str: ...
+    def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str: ...
 
     def _load_bundle(self) -> str:
         return importlib.resources.files(__package__).joinpath(BUNDLE_PATH).read_text(encoding='utf-8')
@@ -59,8 +65,10 @@ class QuickJsNpfRenderer(NpfRenderer):
         code += '\nglobalThis.render = npf2html.default;'
         self.func = quickjs.Function('render', code)
 
-    def __call__(self, content: list[dict[str, Any]]) -> str:
-        return self.func(content)
+    def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str:
+        blocks_data = _content_blocks_adapter.dump_python(blocks, mode='json', by_alias=True, exclude_none=True)
+        options_dict = options.model_dump(mode='json', by_alias=True, exclude_none=True) if options else {}
+        return self.func(blocks_data, options_dict)
 
 
 class MiniRacerNpfRenderer(NpfRenderer):
@@ -80,8 +88,10 @@ class MiniRacerNpfRenderer(NpfRenderer):
         self.ctx = MiniRacer()
         self.ctx.eval(self._load_bundle())
 
-    def __call__(self, content: list[dict[str, Any]]) -> str:
-        return self.ctx.call('npf2html.default', content)
+    def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str:
+        blocks_data = _content_blocks_adapter.dump_python(blocks, mode='json', by_alias=True, exclude_none=True)
+        options_dict = options.model_dump(mode='json', by_alias=True, exclude_none=True) if options else {}
+        return self.ctx.call('npf2html.default', blocks_data, options_dict)
 
 
 def create_npf_renderer() -> 'NpfRenderer | None':

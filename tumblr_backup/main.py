@@ -42,7 +42,7 @@ import requests
 
 # internal modules
 from .is_reblog import post_is_reblog
-from .render_npf import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
+from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .util import (AsyncCallable, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync, fsync,
                    have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
