@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 from typing import Annotated, ClassVar, Literal
 
 __all__ = [
@@ -715,6 +715,8 @@ ContentBlock = Annotated[
     Field(discriminator='type'),
 ]
 
+ContentBlockList = RootModel[list[ContentBlock]]
+
 
 class RendererOptions(BaseModel):
     """A custom Renderer configuration to use to convert NPF components to HTML."""
@@ -752,7 +754,7 @@ class Options(BaseModel):
 
     This is available from `post.asking_avatar` in the Tumblr API.
     """
-    asking_avatar: 'list[VisualMedia] | None' = Field(None, alias='askingAvatar')
+    asking_avatar: 'list[VisualMedia] | None' = Field(default=None, alias='askingAvatar')
 
     """
     A custom Renderer to use to convert NPF components to HTML.

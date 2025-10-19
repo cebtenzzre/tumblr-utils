@@ -42,6 +42,7 @@ import requests
 
 # internal modules
 from .is_reblog import post_is_reblog
+from .npf.models import ContentBlockList, Options as NpfOptions
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .util import (AsyncCallable, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync, fsync,
                    have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
@@ -1637,7 +1638,10 @@ class TumblrPost:
                     # pop title into metadata
                     self.title = blocks_content.pop(0)['text']
                 renderer = self.tb.get_npf_renderer(self.backup_account)
-                body = renderer(blocks_content)
+                body = renderer(
+                    ContentBlockList.model_validate(blocks_content),
+                    NpfOptions(layout=post.get('layout')),
+                )
                 post['body'] = body
                 post['content'] = body
                 append_try('body')

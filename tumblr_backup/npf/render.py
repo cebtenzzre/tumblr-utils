@@ -1,14 +1,11 @@
 import importlib.resources
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel
 from typing_extensions import override
 
-from .models import ContentBlock, Options
-
-ContentBlockList = list[ContentBlock]
-_content_blocks_adapter = TypeAdapter(ContentBlockList)
+from .models import ContentBlockList, Options
 
 __all__ = [
     'MiniRacerNpfRenderer',
@@ -17,6 +14,12 @@ __all__ = [
 ]
 
 BUNDLE_PATH = 'assets/npf2html.iife.js'
+
+
+def dump_js(model: BaseModel) -> Any:
+    """Dump a Pydantic model with parameters suitable for passing to JavaScript."""
+    return model.model_dump(mode='json', by_alias=True, exclude_none=True)
+
 
 try:
     import quickjs
@@ -66,9 +69,10 @@ class QuickJsNpfRenderer(NpfRenderer):
         self.func = quickjs.Function('render', code)
 
     def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str:
-        blocks_data = _content_blocks_adapter.dump_python(blocks, mode='json', by_alias=True, exclude_none=True)
-        options_dict = options.model_dump(mode='json', by_alias=True, exclude_none=True) if options else {}
-        return self.func(blocks_data, options_dict)
+        args = [dump_js(blocks)]
+        if options is not None:
+            args.append(dump_js(options))
+        return self.func(*args)
 
 
 class MiniRacerNpfRenderer(NpfRenderer):
@@ -89,9 +93,11 @@ class MiniRacerNpfRenderer(NpfRenderer):
         self.ctx.eval(self._load_bundle())
 
     def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str:
-        blocks_data = _content_blocks_adapter.dump_python(blocks, mode='json', by_alias=True, exclude_none=True)
-        options_dict = options.model_dump(mode='json', by_alias=True, exclude_none=True) if options else {}
-        return self.ctx.call('npf2html.default', blocks_data, options_dict)
+        blocks_data = dump_js(blocks)
+        args = [blocks_data]
+        if options is not None:
+            args.append(dump_js(options))
+        return self.ctx.call('npf2html.default', *args)
 
 
 def create_npf_renderer() -> 'NpfRenderer | None':
