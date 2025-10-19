@@ -1627,19 +1627,6 @@ class TumblrPost:
             )
 
         elif self.typ == 'blocks':
-            def is_h1(blocks: list[JSONDict], i: int, layout: list[JSONDict]) -> bool:
-                block = blocks[i]
-                return not layout and block['type'] == 'text' and block.get('subtype') == 'heading1'
-
-            self.title = ''
-            if (
-                (first_post := trail[0] if (trail := post.get('trail')) else post)
-                and is_h1((first_content := first_post.get('content', [])), 0, layout := first_post.get('layout', []))
-                and not any(is_h1(first_content, i, layout) for i, _ in list(enumerate(first_content))[1:])
-            ):
-                # pop title into metadata
-                self.title = first_content.pop(0)['text']
-
             renderer = self.tb.get_npf_renderer(self.backup_account)
             BlogInfo = TypedDict('BlogInfo', {'name': str, 'url': str}, total=False)
             TrailContent = NamedTuple('TrailContent', [('blog', BlogInfo), ('content', str), ('post_id', str)])
