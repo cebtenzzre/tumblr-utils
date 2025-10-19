@@ -31,9 +31,9 @@ from pathlib import Path
 from posixpath import basename as urlbasename, join as urlpathjoin, splitext as urlsplitext
 from tempfile import NamedTemporaryFile
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, ContextManager, Iterator, Literal, TextIO, cast
-from urllib.parse import quote, urlencode, urlparse
-from xml.sax.saxutils import escape
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, ContextManager, Iterator, Literal, NamedTuple, TextIO, TypedDict, cast
+from urllib.parse import quote, urlencode, urlparse, urlunparse
+from xml.sax.saxutils import escape, quoteattr
 
 # third-party modules
 import filetype
@@ -1596,6 +1596,7 @@ class TumblrPost:
 
             src = None
             audio_url = get_try('audio_url') or get_try('audio_source_url')
+            # TODO(jared): implement this for blocks posts as well
             if self.options.save_audio:
                 if post['audio_type'] == 'tumblr':
                     if audio_url.startswith('https://a.tumblr.com/'):
@@ -1626,24 +1627,51 @@ class TumblrPost:
             )
 
         elif self.typ == 'blocks':
-            if blocks_content := post.get('content'):
-                self.title = ''
-                def is_h1(block: JSONDict) -> bool:
-                    return block['type'] == 'text' and block.get('subtype') == 'heading1'
-                if (
-                    blocks_content
-                    and is_h1(blocks_content[0])
-                    and not any(is_h1(b) for b in blocks_content[1:])
-                ):
-                    # pop title into metadata
-                    self.title = blocks_content.pop(0)['text']
-                renderer = self.tb.get_npf_renderer(self.backup_account)
-                body = renderer(
-                    _content_block_list_adapter.validate_python(blocks_content),
-                    NpfOptions(layout=post.get('layout')),
-                )
+            def is_h1(blocks: list[JSONDict], i: int, layout: list[JSONDict]) -> bool:
+                block = blocks[i]
+                return not layout and block['type'] == 'text' and block.get('subtype') == 'heading1'
+
+            self.title = ''
+            if (
+                (first_post := trail[0] if (trail := post.get('trail')) else post)
+                and is_h1((first_content := first_post.get('content', [])), 0, layout := first_post.get('layout', []))
+                and not any(is_h1(first_content, i, layout) for i, _ in list(enumerate(first_content))[1:])
+            ):
+                # pop title into metadata
+                self.title = first_content.pop(0)['text']
+
+            renderer = self.tb.get_npf_renderer(self.backup_account)
+            BlogInfo = TypedDict('BlogInfo', {'name': str, 'url': str}, total=False)
+            TrailContent = NamedTuple('TrailContent', [('blog', BlogInfo), ('content', str), ('post_id', str)])
+            rendered_content: list[TrailContent] = [
+                TrailContent(
+                    blog=p['blog'],
+                    content=renderer(
+                        _content_block_list_adapter.validate_python(p['content']),
+                        NpfOptions(layout=p.get('layout', [])),
+                    ),
+                    post_id=pp['id'] if (pp := p.get('post')) else p['id'],
+                ) for p in [*post.get('trail', []), post]
+            ]
+
+            def with_post(url: str, post_id: str) -> str:
+                scheme, netloc, path, params, query, fragment = urlparse(url)
+                path = urlpathjoin(path, post_id)
+                return urlunparse((scheme, netloc, path, params, query, fragment))
+
+            if rendered_content:
+                body = ''
+                while True:
+                    last_post = rendered_content.pop(0)
+                    body += f'\n{last_post.content}'
+                    if not rendered_content:
+                        break
+                    body = (
+                        f'<p><a href={quoteattr(with_post(last_post.blog["url"], last_post.post_id))}'
+                        f' class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p><blockquote>{body}</blockquote>'
+                    )
+
                 post['body'] = body
-                post['content'] = body
                 append_try('body')
 
         else:
