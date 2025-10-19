@@ -1,11 +1,11 @@
 import importlib.resources
 from abc import ABC, abstractmethod
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from typing_extensions import override
 
-from .models import ContentBlockList, Options
+from .models import ContentBlockList, Options, _content_block_list_adapter
 
 __all__ = [
     'MiniRacerNpfRenderer',
@@ -13,12 +13,19 @@ __all__ = [
     'QuickJsNpfRenderer',
 ]
 
-BUNDLE_PATH = 'assets/npf2html.iife.js'
+T = TypeVar('T')
+
+BUNDLE_PATH = '../assets/npf2html.iife.js'
 
 
 def dump_js(model: BaseModel) -> Any:
     """Dump a Pydantic model with parameters suitable for passing to JavaScript."""
     return model.model_dump(mode='json', by_alias=True, exclude_none=True)
+
+
+def dump_js_adapter(adapter: TypeAdapter[T], model: T) -> Any:
+    """Dump a Python object with parameters suitable for passing to JavaScript."""
+    return adapter.dump_python(model, mode='json', by_alias=True, exclude_none=True)
 
 
 try:
@@ -44,7 +51,7 @@ class NpfRenderer(ABC):
     def available(cls) -> bool: ...
 
     @abstractmethod
-    def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str: ...
+    def __call__(self, blocks: ContentBlockList, options: Options | None = None) -> str: ...
 
     def _load_bundle(self) -> str:
         return importlib.resources.files(__package__).joinpath(BUNDLE_PATH).read_text(encoding='utf-8')
@@ -68,8 +75,8 @@ class QuickJsNpfRenderer(NpfRenderer):
         code += '\nglobalThis.render = npf2html.default;'
         self.func = quickjs.Function('render', code)
 
-    def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str:
-        args = [dump_js(blocks)]
+    def __call__(self, blocks: ContentBlockList, options: Options | None = None) -> str:
+        args = [dump_js_adapter(_content_block_list_adapter, blocks)]
         if options is not None:
             args.append(dump_js(options))
         return self.func(*args)
@@ -92,15 +99,14 @@ class MiniRacerNpfRenderer(NpfRenderer):
         self.ctx = MiniRacer()
         self.ctx.eval(self._load_bundle())
 
-    def __call__(self, blocks: ContentBlockList, options: 'Options | None' = None) -> str:
-        blocks_data = dump_js(blocks)
-        args = [blocks_data]
+    def __call__(self, blocks: ContentBlockList, options: Options | None = None) -> str:
+        args = [dump_js_adapter(_content_block_list_adapter, blocks)]
         if options is not None:
             args.append(dump_js(options))
         return self.ctx.call('npf2html.default', *args)
 
 
-def create_npf_renderer() -> 'NpfRenderer | None':
+def create_npf_renderer() -> NpfRenderer | None:
     for cls in [
         QuickJsNpfRenderer,  # preferred
         MiniRacerNpfRenderer,

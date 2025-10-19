@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict, Field, RootModel
-from typing import Annotated, ClassVar, Literal
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter
+from typing import Annotated, Any, ClassVar, Literal
 
 __all__ = [
     'AppAttribution',
@@ -55,7 +55,7 @@ class Media(BaseModel):
     The MIME type of the media asset, or a best approximation will be made
     based on the given URL.
     """
-    type: 'str | None' = None
+    type: str | None = None
 
 
 class VisualMedia(Media):
@@ -74,19 +74,19 @@ class VisualMedia(Media):
     height: int
 
     """For display purposes, this indicates whether the dimensions are defaults."""
-    original_dimensions_missing: 'bool | None' = None
+    original_dimensions_missing: bool | None = None
 
     """
     This indicates whether this media object is a cropped version of the
     original media.
     """
-    cropped: 'bool | None' = None
+    cropped: bool | None = None
 
     """
     This indicates whether this media object has the same dimensions as the
     original media
     """
-    has_original_dimensions: 'bool | None' = None
+    has_original_dimensions: bool | None = None
 
 
 class BlogInfo(BaseModel):
@@ -166,21 +166,21 @@ class AppAttribution(BaseModel):
     url: str
 
     """The name of the application to be attributed."""
-    app_name: 'str | None' = None
+    app_name: str | None = None
 
     """Any display text that the client should use with the attribution."""
-    display_text: 'str | None' = None
+    display_text: str | None = None
 
     """
     A specific logo that the client should use with the third-party app
     attribution.
     """
-    logo: 'VisualMedia | None' = None
+    logo: VisualMedia | None = None
 
 
 """Attribution indicating where a content or layout block came from."""
 Attribution = Annotated[
-    'PostAttribution | LinkAttribution | BlogAttribution | AppAttribution', Field(discriminator='type')
+    PostAttribution | LinkAttribution | BlogAttribution | AppAttribution, Field(discriminator='type')
 ]
 
 
@@ -201,7 +201,7 @@ class RowsDisplay(BaseModel):
     blocks: list[int]
 
     """The display mode for this row."""
-    mode: 'CarouselMode | None' = None
+    mode: CarouselMode | None = None
 
 
 class RowsLayout(BaseModel):
@@ -217,7 +217,7 @@ class RowsLayout(BaseModel):
     display: list[RowsDisplay]
 
     """How the content should be truncated."""
-    truncate_after: 'int | None' = None
+    truncate_after: int | None = None
 
 
 class AskLayout(BaseModel):
@@ -236,7 +236,7 @@ class AskLayout(BaseModel):
     If the ask is not anonymous, this will include information about the blog
     that submitted the ask.
     """
-    attribution: 'BlogAttribution | None' = None
+    attribution: BlogAttribution | None = None
 
 
 """
@@ -244,7 +244,7 @@ A layout indicating how to lay out contents blocks.
 
 See: https://www.tumblr.com/docs/npf#layout-blocks
 """
-Layout = Annotated['AskLayout | RowsLayout', Field(discriminator='type')]
+Layout = Annotated[AskLayout | RowsLayout, Field(discriminator='type')]
 
 
 class InlineFormatBasic(BaseModel):
@@ -326,16 +326,14 @@ A single piece of inline formatting for a TextBlock.
 See: https://www.tumblr.com/docs/npf#inline-formatting-within-a-text-block
 """
 InlineFormat = Annotated[
-    'InlineFormatBasic | InlineFormatLink | InlineFormatMention | InlineFormatColor',
+    InlineFormatBasic | InlineFormatLink | InlineFormatMention | InlineFormatColor,
     Field(discriminator='type'),
 ]
 
 
-class TextBlockNoIndent(BaseModel):
+class TextBlockBase(BaseModel):
     """
-    A text block of a type that doesn't allow indentation.
-
-    See: https://www.tumblr.com/docs/npf#content-block-type-text
+    The base interface for all types of text blocks.
     """
 
     type: Literal['text']
@@ -348,27 +346,34 @@ class TextBlockNoIndent(BaseModel):
 
     See: https://www.tumblr.com/docs/npf#text-block-subtypes
     """
-    subtype: 'Literal["heading1", "heading2", "quirky", "quote", "chat"] | None' = None
+    subtype: Literal[
+        'heading1', 'heading2', 'quirky', 'quote', 'chat', 'indented', 'ordered-list-item', 'unordered-list-item'
+    ] | None = None
 
     """
     Inline formatting for this text.
 
     See: https://www.tumblr.com/docs/npf#inline-formatting-within-a-text-block
     """
-    formatting: 'list[InlineFormat] | None' = None
+    formatting: list[InlineFormat] | None = None
 
 
-class TextBlockIndented(BaseModel):
+class TextBlockNoIndent(TextBlockBase):
+    """
+    A text block of a type that doesn't allow indentation.
+
+    See: https://www.tumblr.com/docs/npf#content-block-type-text
+    """
+
+    subtype: Literal['heading1', 'heading2', 'quirky', 'quote', 'chat'] | None = None
+
+
+class TextBlockIndented(TextBlockBase):
     """
     A text block of a type that allows indentation.
 
     See: https://www.tumblr.com/docs/npf#content-block-type-text
     """
-
-    type: Literal['text']
-
-    """The text to use inside this block."""
-    text: str
 
     """
     The subtype of text block.
@@ -377,19 +382,28 @@ class TextBlockIndented(BaseModel):
     """
     subtype: Literal['indented', 'ordered-list-item', 'unordered-list-item']
 
-    """
-    Inline formatting for this text.
-
-    See: https://www.tumblr.com/docs/npf#inline-formatting-within-a-text-block
-    """
-    formatting: 'list[InlineFormat] | None' = None
-
     """See: https://www.tumblr.com/docs/npf#text-block-subtype-list-item"""
-    indent_level: 'int | None' = None
+    indent_level: int | None = None
+
+
+def textblock_discriminator(v: Any) -> str:
+    if isinstance(v, dict):
+        st = v.get('subtype')
+    else:
+        # model instance during serialization
+        st = getattr(v, 'subtype', None)
+
+    if st in {'indented', 'ordered-list-item', 'unordered-list-item'}:
+        return 'indented'
+
+    return 'noindent'
 
 
 """An NPF text type content block."""
-TextBlock = Annotated['TextBlockNoIndent | TextBlockIndented', Field(discriminator='subtype')]
+TextBlock = Annotated[
+    Annotated[TextBlockNoIndent, Tag('noindent')] | Annotated[TextBlockIndented, Tag('indented')],
+    Discriminator(textblock_discriminator),
+]
 
 
 class ImageBlock(BaseModel):
@@ -408,26 +422,26 @@ class ImageBlock(BaseModel):
     media: list[VisualMedia]
 
     """Colors used in the image."""
-    colors: 'dict[str, str] | None' = None
+    colors: dict[str, str] | None = None
 
     """A feedback token to use when this image block is a GIF Search result."""
-    feedback_token: 'str | None' = None
+    feedback_token: str | None = None
 
     """
     For GIFs, this is a single-frame "poster".
 
     See: https://www.tumblr.com/docs/npf#gif-posters
     """
-    poster: 'VisualMedia | None' = None
+    poster: VisualMedia | None = None
 
     """See: https://www.tumblr.com/docs/npf#attributions"""
-    attribution: 'Attribution | None' = None
+    attribution: Attribution | None = None
 
     """Text used to describe the image, for screen readers."""
-    alt_text: 'str | None' = None
+    alt_text: str | None = None
 
     """A caption typically shown under the image."""
-    caption: 'str | None' = None
+    caption: str | None = None
 
 
 class AudioBlock(BaseModel):
@@ -443,46 +457,46 @@ class AudioBlock(BaseModel):
     The URL to use for the audio block. Either this, media, or both
     will always be set.
     """
-    url: 'str | None' = None
+    url: str | None = None
 
     """
     The Media to use for the audio block. Either this, url, or
     both will always be set.
     """
-    media: 'list[Media] | None' = None
+    media: list[Media] | None = None
 
     """
     The provider of the audio source, whether it's tumblr for native audio or
     a trusted third party.
     """
-    provider: 'str | None' = None
+    provider: str | None = None
 
     """The title of the audio asset."""
-    title: 'str | None' = None
+    title: str | None = None
 
     """The artist of the audio asset."""
-    artist: 'str | None' = None
+    artist: str | None = None
 
     """The album from which the audio asset originated."""
-    album: 'str | None' = None
+    album: str | None = None
 
     """
     An image media object to use as a "poster" for the audio track, usually
     album art.
     """
-    poster: 'list[VisualMedia] | None' = None
+    poster: list[VisualMedia] | None = None
 
     """HTML code that could be used to embed this audio track into a webpage."""
-    embed_html: 'str | None' = None
+    embed_html: str | None = None
 
     """A URL to the embeddable content to use as an iframe."""
     embed_url: 'str | None' = None
 
     """Optional provider-specific metadata about the audio track."""
-    metadata: 'dict[str, object] | None' = None
+    metadata: dict[str, object] | None = None
 
     """Optional attribution information about where the audio track came from."""
-    attribution: 'Attribution | None' = None
+    attribution: Attribution | None = None
 
 
 class LinkBlock(BaseModel):
@@ -498,21 +512,21 @@ class LinkBlock(BaseModel):
     url: str
 
     """The title of where the link goes."""
-    title: 'str | None' = None
+    title: str | None = None
 
     """The description of where the link goes."""
-    description: 'str | None' = None
+    description: str | None = None
 
     """The author of the link's content."""
-    author: 'str | None' = None
+    author: str | None = None
 
     """The name of the site being linked to."""
-    site_name: 'str | None' = None
+    site_name: str | None = None
 
-    display_url: 'str | None' = None
+    display_url: str | None = None
 
     """An image media object to use as a "poster" for the link."""
-    poster: 'list[VisualMedia] | None' = None
+    poster: list[VisualMedia] | None = None
 
 
 class IFrame(BaseModel):
@@ -545,25 +559,25 @@ class VideoBlock(BaseModel):
     The URL to use for the video block. Either this, media, or both
     will always be set.
     """
-    url: 'str | None' = None
+    url: str | None = None
 
     """
     The Media to use for the video block. Either this, url, or
     both will always be set.
     """
-    media: 'VisualMedia | None' = None
+    media: VisualMedia | None = None
 
     """
     The provider of the audio source, whether it's tumblr for native audio or
     a trusted third party.
     """
-    provider: 'str | None' = None
+    provider: str | None = None
 
     """HTML code that could be used to embed this video into a webpage."""
-    embed_html: 'str | None' = None
+    embed_html: str | None = None
 
     """An IFrame used for constructing video iframes."""
-    embed_iframe: 'IFrame | None' = None
+    embed_iframe: IFrame | None = None
 
     """A URL to the embeddable content to use as an iframe."""
     embed_url: 'str | None' = None
@@ -572,19 +586,19 @@ class VideoBlock(BaseModel):
     An image media object to use as a "poster" for the video, usually a single
     frame.
     """
-    poster: 'list[VisualMedia] | None' = None
+    poster: list[VisualMedia] | None = None
 
     """Optional provider-specific metadata about the video."""
-    metadata: 'dict[str, object] | None' = None
+    metadata: dict[str, object] | None = None
 
     """Optional attribution information about where the video came from."""
-    attribution: 'Attribution | None' = None
+    attribution: Attribution | None = None
 
     """Whether this video can be played on a cellular connection."""
-    can_autoplay_on_cellular: 'bool | None' = None
+    can_autoplay_on_cellular: bool | None = None
 
     """The video duration in milliseconds."""
-    duration: 'int | None' = None
+    duration: int | None = None
 
 
 class PollAnswer(BaseModel):
@@ -665,7 +679,7 @@ class PaywallBlockCta(BaseModel):
     url: str
 
     """Whether this paywall block is actually visible, default to true."""
-    is_visible: 'bool | None' = None
+    is_visible: bool | None = None
 
     """The CTA title that appears above the main text."""
     title: str
@@ -690,18 +704,18 @@ class PaywallBlockDivider(BaseModel):
     url: str
 
     """Whether this paywall block is actually visible, default to true."""
-    is_visible: 'bool | None' = None
+    is_visible: bool | None = None
 
     """The label text."""
     text: str
 
     """The hex color for the label and divider, e.g. #eeeeee."""
-    color: 'str | None' = None
+    color: str | None = None
 
 
 """An NPF paywall type content block."""
 PaywallBlock = Annotated[
-    'PaywallBlockCta | PaywallBlockDivider', Field(discriminator='subtype')
+    PaywallBlockCta | PaywallBlockDivider, Field(discriminator='subtype')
 ]
 
 
@@ -711,11 +725,13 @@ A single discrete unit of content.
 See: https://www.tumblr.com/docs/npf#content-blocks
 """
 ContentBlock = Annotated[
-    'AudioBlock | ImageBlock | LinkBlock | PaywallBlock | PollBlock | TextBlock | VideoBlock',
+    AudioBlock | ImageBlock | LinkBlock | PaywallBlock | PollBlock | TextBlock | VideoBlock,
     Field(discriminator='type'),
 ]
 
-ContentBlockList = RootModel[list[ContentBlock]]
+ContentBlockList = list[ContentBlock]
+
+_content_block_list_adapter = TypeAdapter(ContentBlockList)
 
 
 class RendererOptions(BaseModel):
@@ -723,8 +739,8 @@ class RendererOptions(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(populate_by_name=True)
 
-    prefix: 'str | None' = None
-    asking_avatar: 'list[VisualMedia] | None' = Field(None, alias='askingAvatar')
+    prefix: str | None = None
+    asking_avatar: list[VisualMedia] | None = Field(None, alias='askingAvatar')
 
 
 class Options(BaseModel):
@@ -739,14 +755,14 @@ class Options(BaseModel):
     This is also used for CSS variables to convey additional style information
     about the blocks.
     """
-    prefix: 'str | None' = None
+    prefix: str | None = None
 
     """
     The layouts describing how to group different content blocks.
 
     This is available from `post.layout` in the Tumblr API.
     """
-    layout: 'list[Layout] | None' = None
+    layout: list[Layout] | None = None
 
     """
     The VisualMedia to use for the asker's avatar if the post being
@@ -762,4 +778,4 @@ class Options(BaseModel):
     If this is passed, prefix and asking_avatar are ignored in
     favor of the corresponding values in the renderer.
     """
-    renderer: 'RendererOptions | None' = None
+    renderer: RendererOptions | None = None
