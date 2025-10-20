@@ -413,7 +413,7 @@ class ApiParser:
 
         return self.apiparse(1)
 
-    def apiparse(self, count, start=0, before=None, ident=None) -> JSONDict | None:
+    def apiparse(self, count, start=0, before=None, ident=None, next_query: dict[str, Any] | None = None) -> JSONDict | None:
         assert self.api_key is not None
 
         if self.prev_resps is not None:
@@ -449,6 +449,9 @@ class ApiParser:
         params = {'api_key': self.api_key, 'limit': count, 'reblog_info': 'true'}
         if ident is not None:
             params['id'] = ident
+        elif next_query is not None:
+            # proper pagination
+            params.update((k, v) for k, v in next_query.items() if k in ['before', 'page_number'])
         elif before is not None:
             params['before'] = before
         elif start > 0:
@@ -459,8 +462,6 @@ class ApiParser:
         if self.dashboard_only_blog:
             # dashboard-only blogs are authenticated with a bearer token
             del params['api_key']
-            params['post_format'] = 'legacy'
-            params['npf'] = 'false'
             headers['Authorization'] = f'Bearer {self.api_key}'
 
         try:
@@ -982,7 +983,7 @@ class TumblrBackup:
             )
             sys.exit(1)
         if not isinstance(renderer, QuickJsNpfRenderer):
-            logger.info('note: using mini-racer for npf2html')
+            logger.info('[npf2html] note: using mini-racer\n')
         cls._npf_renderer = renderer
         return renderer
 
@@ -1392,6 +1393,7 @@ class TumblrBackup:
             # Posts "arrive" in reverse chronological order. Post #0 is the most recent one.
             i = self.options.skip
 
+            next_query: dict[str, Any] | None = None
             while True:
                 # find the upper bound
                 logger.status('Getting {}posts {} to {}{}\r'.format(
@@ -1408,7 +1410,7 @@ class TumblrBackup:
                         break
 
                 with multicond:
-                    api_thread.put(MAX_POSTS, i, before, next_ident)
+                    api_thread.put(MAX_POSTS, i, before, next_ident, next_query)
 
                     while not api_thread.response.qsize():
                         no_internet.check(release=True)
@@ -1427,16 +1429,16 @@ class TumblrBackup:
                     logger.info('Backup complete: Found empty set of posts\n', account=True)
                     break
 
+                posts = [p for p in posts if p.get('object_type', 'post') == 'post']  # filter ads from dashboard api
                 res, oldest_date = _backup(posts)
                 if not res:
                     break
 
-                if self.options.likes and prev_archive is None:
-                    next_ = resp['_links'].get('next')
-                    if next_ is None:
-                        logger.info('Backup complete: Found end of likes\n', account=True)
+                if prev_archive is None:
+                    next_query = resp.get('_links', {}).get('next', {}).get('query_params')
+                    if next_query is None:
+                        logger.info('Backup complete: End of posts\n', account=True)
                         break
-                    before = int(next_['query_params']['before'])
                 elif before is not None:
                     assert oldest_date <= before
                     if oldest_date == before:
@@ -1562,7 +1564,7 @@ class TumblrPost:
             src = None
             if audio_url.startswith('https://a.tumblr.com/'):
                 # npf posts have "?play_key=...", strip it
-                audio_url = urlunparse(urlparse(audio_url)._replace(query=None))
+                audio_url = urlunparse(urlparse(audio_url)._replace(query=None))  # type: ignore[arg-type, assignment]
                 src = self.get_media_url(audio_url, '.mp3')
             elif audio_url.startswith('https://www.tumblr.com/audio_file/'):
                 audio_url = 'https://a.tumblr.com/{}o1.mp3'.format(urlbasename(urlparse(audio_url).path))
@@ -1660,23 +1662,33 @@ class TumblrPost:
                             img_offset += 1
                         case VideoBlock(media=VisualMedia(url=video_url)):
                             if src := maybe_try_get_media_url_video(video_url):
-                                block.media.url = src
+                                block.media.url = src  # type: ignore[union-attr]
                         case AudioBlock(media=VisualMedia(url=audio_url)) if self.options.save_audio:
                             if src := try_get_media_url_tumblr_audio(audio_url):
-                                block.media.url = src
+                                block.media.url = src  # type: ignore[union-attr]
                 return blocks
 
+            BlogInfo = TypedDict('BlogInfo', {'name': str, 'url': str | None}, total=False)
+
+            def get_blog(p: dict[str, Any]) -> BlogInfo:
+                """Get a blog object representing a post or trail item."""
+                _undefined = object()
+                if (b := p.get('blog', _undefined)) is not _undefined:
+                    return b
+                b = p['broken_blog']
+                b.setdefault('url', None)
+                return b
+
             renderer = self.tb.get_npf_renderer(self.backup_account)
-            BlogInfo = TypedDict('BlogInfo', {'name': str, 'url': str}, total=False)
-            TrailContent = NamedTuple('TrailContent', [('blog', BlogInfo), ('content', str), ('post_id', str)])
+            TrailContent = NamedTuple('TrailContent', [('blog', BlogInfo), ('content', str), ('post_id', str | None)])
             rendered_content: list[TrailContent] = [
                 TrailContent(
-                    blog=p['blog'],
+                    blog=get_blog(p),
                     content=renderer(
                         preprocess(_content_block_list_adapter.validate_python(p['content'])),
                         NpfOptions(layout=p.get('layout', [])),
                     ),
-                    post_id=pp['id'] if (pp := p.get('post')) else p['id'],
+                    post_id=pp.get('id') if (pp := p.get('post')) else p['id'],
                 ) for p in [*post.get('trail', []), post]
             ]
 
@@ -1691,10 +1703,10 @@ class TumblrPost:
                     body += f'\n{last_post.content}'
                     if not rendered_content:
                         break
-                    body = (
-                        f'<p><a href={quoteattr(with_post(last_post.blog["url"], last_post.post_id))}'
-                        f' class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p><blockquote>{body}</blockquote>'
-                    )
+                    href = ''
+                    if (url := last_post.blog['url']) is not None and (pid := last_post.post_id) is not None:
+                        href = f' href={quoteattr(with_post(url, pid))}'
+                    body = f'<p><a{href} class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p><blockquote>{body}</blockquote>'
 
                 post['body'] = body
                 append_try('body')

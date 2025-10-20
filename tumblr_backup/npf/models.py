@@ -20,6 +20,7 @@ __all__ = [
     'Layout',
     'LinkAttribution',
     'LinkBlock',
+    'MaybeAttribution',
     'Media',
     'Options',
     'PaywallBlock',
@@ -182,6 +183,10 @@ class AppAttribution(BaseModel):
 Attribution = Annotated[
     PostAttribution | LinkAttribution | BlogAttribution | AppAttribution, Field(discriminator='type')
 ]
+
+# Sometimes attribution is an empty list in the API
+EmptyList = Annotated[list[Any], Field(min_length=0, max_length=0)]
+MaybeAttribution = Attribution | EmptyList
 
 
 class CarouselMode(BaseModel):
@@ -435,7 +440,7 @@ class ImageBlock(BaseModel):
     poster: VisualMedia | None = None
 
     """See: https://www.tumblr.com/docs/npf#attributions"""
-    attribution: Attribution | None = None
+    attribution: MaybeAttribution | None = None
 
     """Text used to describe the image, for screen readers."""
     alt_text: str | None = None
@@ -496,7 +501,7 @@ class AudioBlock(BaseModel):
     metadata: dict[str, object] | None = None
 
     """Optional attribution information about where the audio track came from."""
-    attribution: Attribution | None = None
+    attribution: MaybeAttribution | None = None
 
 
 class LinkBlock(BaseModel):
@@ -592,7 +597,7 @@ class VideoBlock(BaseModel):
     metadata: dict[str, object] | None = None
 
     """Optional attribution information about where the video came from."""
-    attribution: Attribution | None = None
+    attribution: MaybeAttribution | None = None
 
     """Whether this video can be played on a cellular connection."""
     can_autoplay_on_cellular: bool | None = None
