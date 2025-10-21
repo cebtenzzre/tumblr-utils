@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter, model_validator
 from typing import Annotated, Any, ClassVar, Literal
 
 __all__ = [
@@ -9,6 +9,7 @@ __all__ = [
     'BlogAttribution',
     'BlogInfo',
     'CarouselMode',
+    'CondensedLayout',
     'ContentBlock',
     'IFrame',
     'ImageBlock',
@@ -244,12 +245,39 @@ class AskLayout(BaseModel):
     attribution: BlogAttribution | None = None
 
 
+class CondensedLayout(BaseModel):
+    """
+    Deprecated layout type that is equivalent to a rows layout with truncate_after.
+
+    See: https://www.tumblr.com/docs/npf#layout-block-type-condensed
+    """
+
+    type: Literal['condensed']
+
+    """An array of block indices that are part of this condensed layout."""
+    blocks: list[int] | None = None
+
+    """
+    How the content should be truncated. If not set, defaults to the last
+    block in the blocks array.
+    """
+    truncate_after: int | None = None
+
+    @model_validator(mode='after')
+    def validate_condensed_layout(self) -> 'CondensedLayout':
+        if self.blocks is None and self.truncate_after is None:
+            raise ValueError('Condensed layout requires either blocks or truncate_after to be present')
+        if self.blocks is not None and (not self.blocks or self.blocks != list(range(len(self.blocks)))):
+            raise ValueError(f'Condensed layout has invalid blocks: {self.blocks}')
+        return self
+
+
 """
 A layout indicating how to lay out contents blocks.
 
 See: https://www.tumblr.com/docs/npf#layout-blocks
 """
-Layout = Annotated[AskLayout | RowsLayout, Field(discriminator='type')]
+Layout = Annotated[AskLayout | CondensedLayout | RowsLayout, Field(discriminator='type')]
 
 
 class InlineFormatBasic(BaseModel):
