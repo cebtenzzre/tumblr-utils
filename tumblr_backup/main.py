@@ -1434,6 +1434,10 @@ class TumblrBackup:
                 if not res:
                     break
 
+                if next_ident is not None:
+                    i += 1  # one post at a time
+                    continue
+
                 if prev_archive is None:
                     next_query = resp.get('_links', {}).get('next', {}).get('query_params')
                     if next_query is None:
@@ -1445,10 +1449,7 @@ class TumblrBackup:
                         oldest_date -= 1
                     before = oldest_date
 
-                if self.options.idents is None:
-                    i += MAX_POSTS
-                else:
-                    i += 1
+                i += MAX_POSTS
 
             api_thread.quit()
             backup_pool.wait()  # wait until all posts have been saved
