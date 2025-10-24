@@ -67,13 +67,13 @@ class VisualMedia(Media):
     The width of the media asset, if that makes sense (for images and videos,
     but not for audio).
     """
-    width: int
+    width: int | None = None
 
     """
     The height of the media asset, if that makes sense (for images and videos,
     but not for audio).
     """
-    height: int
+    height: int | None = None
 
     """For display purposes, this indicates whether the dimensions are defaults."""
     original_dimensions_missing: bool | None = None

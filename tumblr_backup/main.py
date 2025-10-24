@@ -1656,7 +1656,7 @@ class TumblrPost:
                 for block in blocks:
                     match block:
                         case ImageBlock():
-                            widest = max(block.media, key=lambda m: m.width)
+                            widest = max(block.media, key=lambda m: m.width or 0)
                             if self.options.save_images:
                                 widest.url = self.get_image_url(widest.url, img_offset if is_photoset else 0)
                             block.media = [widest]
