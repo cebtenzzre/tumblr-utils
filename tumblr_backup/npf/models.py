@@ -267,7 +267,7 @@ class CondensedLayout(BaseModel):
     def validate_condensed_layout(self) -> 'CondensedLayout':
         if self.blocks is None and self.truncate_after is None:
             raise ValueError('Condensed layout requires either blocks or truncate_after to be present')
-        if self.blocks is not None and (not self.blocks or self.blocks != list(range(len(self.blocks)))):
+        if self.blocks is not None and self.blocks != list(range(len(self.blocks))):
             raise ValueError(f'Condensed layout has invalid blocks: {self.blocks}')
         return self
 

@@ -2490,7 +2490,7 @@ def main():
         parser.error('--id-file not implemented for likes')
     if options.copy_notes is None:
         # Default to True if we may regenerate posts
-        options.copy_notes = options.reuse_json and not (options.no_post_clobber or options.mtime_fix)
+        options.copy_notes = options.reuse_json and not options.no_post_clobber
 
     # NB: this is done after setting implied options
     orig_options = vars(options).copy()
