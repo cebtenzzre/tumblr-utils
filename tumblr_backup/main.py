@@ -413,7 +413,9 @@ class ApiParser:
 
         return self.apiparse(1)
 
-    def apiparse(self, count, start=0, before=None, ident=None, next_query: dict[str, Any] | None = None) -> JSONDict | None:
+    def apiparse(
+        self, count, start=0, before=None, ident=None, next_query: dict[str, Any] | None = None
+    ) -> JSONDict | None:
         assert self.api_key is not None
 
         if self.prev_resps is not None:
@@ -1707,7 +1709,10 @@ class TumblrPost:
                     href = ''
                     if (url := last_post.blog['url']) is not None and (pid := last_post.post_id) is not None:
                         href = f' href={quoteattr(with_post(url, pid))}'
-                    body = f'<p><a{href} class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p><blockquote>{body}</blockquote>'
+                    body = (
+                        f'<p><a{href} class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p>' +
+                        f'<blockquote>{body}</blockquote>'
+                    )
 
                 post['body'] = body
                 append_try('body')
