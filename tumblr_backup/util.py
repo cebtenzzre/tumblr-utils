@@ -216,9 +216,7 @@ def setup_urllib3_ssl():
 
 
 def make_requests_session(session_type, retry, timeout, verify, user_agent, cookiefile):
-    if TYPE_CHECKING:
-        global swt_base
-    else:
+    if not TYPE_CHECKING:
         swt_base = session_type  # type: ignore
 
     class SessionWithTimeout(swt_base):

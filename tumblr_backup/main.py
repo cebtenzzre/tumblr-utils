@@ -31,9 +31,11 @@ from pathlib import Path
 from posixpath import basename as urlbasename, join as urlpathjoin, splitext as urlsplitext
 from tempfile import NamedTemporaryFile
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Literal, TextIO, cast
-from urllib.parse import quote, urlencode, urlparse
-from xml.sax.saxutils import escape
+from typing import (
+    TYPE_CHECKING, Any, Callable, ClassVar, ContextManager, Iterator, Literal, NamedTuple, TextIO, TypedDict, cast
+)
+from urllib.parse import quote, urlencode, urlparse, urlunparse
+from xml.sax.saxutils import escape, quoteattr
 
 # third-party modules
 import filetype
@@ -42,6 +44,16 @@ import requests
 
 # internal modules
 from .is_reblog import post_is_reblog
+from .npf.models import (
+    AudioBlock,
+    ContentBlockList,
+    ImageBlock,
+    Options as NpfOptions,
+    VideoBlock,
+    VisualMedia,
+    _content_block_list_adapter,
+)
+from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .util import (AsyncCallable, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync, fsync,
                    have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
@@ -103,7 +115,6 @@ avatar_base = 'avatar'
 dir_index = 'index.html'
 tag_index_dir = 'tags'
 
-blog_name = ''
 post_ext = '.html'
 have_custom_css = False
 
@@ -274,15 +285,24 @@ def strftime(fmt, t=None):
     return time.strftime(fmt, t)
 
 
-def get_api_url(account: str, likes: bool) -> str:
+def get_dotted_blogname(account: str) -> str:
+    if '.' in account:
+        return account
+    return account + '.tumblr.com'
+
+
+def get_api_url(account: str, *, likes: bool, dash: bool | None) -> str:
     """construct the tumblr API URL"""
-    global blog_name
     blog_name = account
     if any(c in account for c in '/\\') or account in ('.', '..'):
         raise ValueError(f'Invalid blog name: {account!r}')
-    if '.' not in account:
-        blog_name += '.tumblr.com'
-    return f'https://api.tumblr.com/v2/blog/{blog_name}/{"likes" if likes else "posts"}'
+    if '.' not in account and not dash:
+        blog_name = get_dotted_blogname(account)
+    return 'https://{base}/v2/blog/{blog_name}/{route}'.format(
+        base="www.tumblr.com/api" if dash else "api.tumblr.com",
+        blog_name=blog_name,
+        route="likes" if likes else "posts",
+    )
 
 
 def parse_period_date(period):
@@ -318,11 +338,10 @@ def get_posts_key(likes: bool) -> str:
 
 class ApiParser:
     TRY_LIMIT = 2
-    session: requests.Session | None = None
-    api_key: str | None = None
+    session: ClassVar[requests.Session | None] = None
+    api_key: ClassVar[str | None] = None
 
-    def __init__(self, base: str, account: str, options: Namespace):
-        self.base = base
+    def __init__(self, tb: TumblrBackup, account: str, options: Namespace):
         self.account = account
         self.options = options
         self.prev_resps: list[str] | None = None
@@ -330,6 +349,7 @@ class ApiParser:
         self._prev_iter: Iterator[JSONDict] | None = None
         self._last_mode: str | None = None
         self._last_offset: int | None = None
+        self._tb = tb
 
     @classmethod
     def setup(
@@ -391,13 +411,11 @@ class ApiParser:
                 r['blog']['posts'] = len(self.prev_resps)
             return r
 
-        resp = self.apiparse(1)
-        if self.dashboard_only_blog and resp and resp['posts']:
-            # svc API doesn't return blog info, steal it from the first post
-            resp['blog'] = resp['posts'][0]['blog']
-        return resp
+        return self.apiparse(1)
 
-    def apiparse(self, count, start=0, before=None, ident=None) -> JSONDict | None:
+    def apiparse(
+        self, count, start=0, before=None, ident=None, next_query: dict[str, Any] | None = None
+    ) -> JSONDict | None:
         assert self.api_key is not None
 
         if self.prev_resps is not None:
@@ -430,24 +448,23 @@ class ApiParser:
                 posts = list(itertools.islice(it, None, count))
             return {get_posts_key(self.options.likes): posts}
 
-        if self.dashboard_only_blog:
-            base = 'https://www.tumblr.com/svc/indash_blog'
-            params = {'tumblelog_name_or_id': self.account, 'post_id': '', 'limit': count,
-                      'should_bypass_safemode': 'true', 'should_bypass_tagfiltering': 'true'}
-            headers: dict[str, str] | None = {
-                'Referer': 'https://www.tumblr.com/dashboard/blog/' + self.account,
-                'X-Requested-With': 'XMLHttpRequest',
-            }
-        else:
-            base = self.base
-            params = {'api_key': self.api_key, 'limit': count, 'reblog_info': 'true'}
-            headers = None
+        params = {'api_key': self.api_key, 'limit': count, 'reblog_info': 'true'}
         if ident is not None:
-            params['post_id' if self.dashboard_only_blog else 'id'] = ident
-        elif before is not None and not self.dashboard_only_blog:
+            params['id'] = ident
+        elif next_query is not None:
+            # proper pagination
+            params.update((k, v) for k, v in next_query.items() if k in ['before', 'page_number'])
+        elif before is not None:
             params['before'] = before
         elif start > 0:
             params['offset'] = start
+
+        base = get_api_url(self.account, likes=self.options.likes, dash=self.dashboard_only_blog)
+        headers = {}
+        if self.dashboard_only_blog:
+            # dashboard-only blogs are authenticated with a bearer token
+            del params['api_key']
+            headers['Authorization'] = f'Bearer {self.api_key}'
 
         try:
             doc, status, reason = self._get_resp(base, params, headers)
@@ -463,7 +480,8 @@ class ApiParser:
                 errors = doc.get('errors', ())
                 if len(errors) == 1 and errors[0].get('code') == 4012:
                     self.dashboard_only_blog = True
-                    logger.info('Found dashboard-only blog, trying svc API\n', account=True)
+                    logger.info('Found dashboard-only blog, trying internal API\n', account=True)
+                    self._tb.get_npf_renderer(self.account)  # fail/warn fast if unavailable
                     return self.apiparse(count, start)  # Recurse once
             if status == 403 and self.options.likes:
                 logger.error('HTTP 403: Most likely {} does not have public likes.\n'.format(self.account))
@@ -644,7 +662,7 @@ def match_avatar(name):
     return name.startswith(avatar_base + '.')
 
 
-def get_avatar(prev_archive: str | os.PathLike[str], no_get: bool) -> None:
+def get_avatar(account: str, prev_archive: str | os.PathLike[str], no_get: bool) -> None:
     if prev_archive is not None:
         # Copy old avatar, if present
         avatar_matches = find_files(join(prev_archive, theme_dir), match_avatar)
@@ -657,7 +675,7 @@ def get_avatar(prev_archive: str | os.PathLike[str], no_get: bool) -> None:
     if no_get:
         return  # Don't download the avatar
 
-    url = 'https://api.tumblr.com/v2/blog/%s/avatar' % blog_name
+    url = 'https://api.tumblr.com/v2/blog/%s/avatar' % get_dotted_blogname(account)
     avatar_dest = avatar_fpath = open_file(lambda f: f, (theme_dir, avatar_base))
 
     # Remove old avatars
@@ -680,7 +698,7 @@ def get_avatar(prev_archive: str | os.PathLike[str], no_get: bool) -> None:
         e.log()
 
 
-def get_style(prev_archive: str | os.PathLike[str], no_get: bool, use_dns_check: bool) -> None:
+def get_style(account: str, prev_archive: str | os.PathLike[str], no_get: bool, use_dns_check: bool) -> None:
     """Get the blog's CSS by brute-forcing it from the home page.
     The v2 API has no method for getting the style directly.
     See https://groups.google.com/d/msg/tumblr-api/f-rRH6gOb6w/sAXZIeYx5AUJ"""
@@ -693,7 +711,7 @@ def get_style(prev_archive: str | os.PathLike[str], no_get: bool, use_dns_check:
     if no_get:
         return  # Don't download the style
 
-    url = 'https://%s/' % blog_name
+    url = 'https://%s/' % get_dotted_blogname(account)
     try:
         resp = urlopen(url, use_dns_check=use_dns_check)
         page_data = resp.data
@@ -937,6 +955,8 @@ class Indices:
 
 
 class TumblrBackup:
+    _npf_renderer: ClassVar[NpfRenderer | None] = None
+
     def __init__(self, options: Namespace, orig_options: dict[str, Any], get_arg_default: Callable[[str], Any]):
         self.options = options
         self.orig_options = orig_options
@@ -952,6 +972,22 @@ class TumblrBackup:
         self.media_list_file: TextIO | None = None
         self.mlf_seen: set[int] = set()
         self.mlf_lock = threading.Lock()
+
+    def get_npf_renderer(self, account: str) -> NpfRenderer:
+        cls = type(self)
+        if cls._npf_renderer is not None:
+            return cls._npf_renderer
+        renderer = create_npf_renderer()
+        if renderer is None:
+            logger.error(
+                f'Dashboard-only blog {account} requires a js engine for npf2html.\n'
+                'Try `pip install "tumblr-backup[dashboard]"`\n'
+            )
+            sys.exit(1)
+        if not isinstance(renderer, QuickJsNpfRenderer):
+            logger.info('[npf2html] note: using mini-racer\n')
+        cls._npf_renderer = renderer
+        return renderer
 
     def exit_code(self):
         if self.failed_blogs or self.postfail_blogs:
@@ -1134,8 +1170,6 @@ class TumblrBackup:
     def backup(self, account, prev_archive):
         """makes single files and an index for every post on a public Tumblr blog account"""
 
-        base = get_api_url(account, likes=self.options.likes)
-
         # make sure there are folders to save in
         global save_folder, media_folder, post_ext, post_dir, save_dir, have_custom_css
         if self.options.json_info:
@@ -1188,7 +1222,7 @@ class TumblrBackup:
 
         logger.status('Getting basic information\r')
 
-        api_parser = ApiParser(base, account, self.options)
+        api_parser = ApiParser(self, account, self.options)
         if not api_parser.read_archive(prev_archive):
             self.failed_blogs.append(account)
             return
@@ -1229,8 +1263,8 @@ class TumblrBackup:
 
         def build_index():
             logger.status('Getting avatar and style\r')
-            get_avatar(prev_archive, no_get=self.options.no_get)
-            get_style(prev_archive, no_get=self.options.no_get, use_dns_check=self.options.use_dns_check)
+            get_avatar(account, prev_archive, no_get=self.options.no_get)
+            get_style(account, prev_archive, no_get=self.options.no_get, use_dns_check=self.options.use_dns_check)
             if not have_custom_css:
                 save_style()
             logger.status('Building index\r')
@@ -1279,8 +1313,6 @@ class TumblrBackup:
         before = self.options.period[1] if self.options.period else None
         if oldest_tstamp is not None:
             before = oldest_tstamp if before is None else min(before, oldest_tstamp)
-        if before is not None and api_parser.dashboard_only_blog:
-            logger.warn('Warning: skipping posts on a dashboard-only blog is slow\n', account=True)
 
         def _backup(posts):
             """returns whether any posts from this batch were saved"""
@@ -1289,11 +1321,9 @@ class TumblrBackup:
             for p in sorted(posts, key=sort_key, reverse=True):
                 no_internet.check()
                 enospc.check()
-                post = post_class(p, self.options, account, prev_archive, self.pa_options, self.record_media)
+                post = post_class(self, p, account, prev_archive)
                 oldest_date = post.date
                 if before is not None and post.date >= before:
-                    if api_parser.dashboard_only_blog:
-                        continue  # cannot request 'before' with the svc API
                     raise RuntimeError('Found post with date ({}) newer than before param ({})'.format(
                         post.date, before))
                 if ident_max is None:
@@ -1365,6 +1395,7 @@ class TumblrBackup:
             # Posts "arrive" in reverse chronological order. Post #0 is the most recent one.
             i = self.options.skip
 
+            next_query: dict[str, Any] | None = None
             while True:
                 # find the upper bound
                 logger.status('Getting {}posts {} to {}{}\r'.format(
@@ -1381,7 +1412,7 @@ class TumblrBackup:
                         break
 
                 with multicond:
-                    api_thread.put(MAX_POSTS, i, before, next_ident)
+                    api_thread.put(MAX_POSTS, i, before, next_ident, next_query)
 
                     while not api_thread.response.qsize():
                         no_internet.check(release=True)
@@ -1400,26 +1431,27 @@ class TumblrBackup:
                     logger.info('Backup complete: Found empty set of posts\n', account=True)
                     break
 
+                posts = [p for p in posts if p.get('object_type', 'post') == 'post']  # filter ads from dashboard api
                 res, oldest_date = _backup(posts)
                 if not res:
                     break
 
-                if self.options.likes and prev_archive is None:
-                    next_ = resp['_links'].get('next')
-                    if next_ is None:
-                        logger.info('Backup complete: Found end of likes\n', account=True)
+                if next_ident is not None:
+                    i += 1  # one post at a time
+                    continue
+
+                if prev_archive is None:
+                    next_query = resp.get('_links', {}).get('next', {}).get('query_params')
+                    if next_query is None:
+                        logger.info('Backup complete: End of posts\n', account=True)
                         break
-                    before = int(next_['query_params']['before'])
-                elif before is not None and not api_parser.dashboard_only_blog:
+                elif before is not None:
                     assert oldest_date <= before
                     if oldest_date == before:
                         oldest_date -= 1
                     before = oldest_date
 
-                if self.options.idents is None:
-                    i += MAX_POSTS
-                else:
-                    i += 1
+                i += MAX_POSTS
 
             api_thread.quit()
             backup_pool.wait()  # wait until all posts have been saved
@@ -1453,26 +1485,25 @@ class TumblrPost:
 
     def __init__(
         self,
+        tb: TumblrBackup,
         post: JSONDict,
-        options: Namespace,
         backup_account: str,
         prev_archive: str | None,
-        pa_options: JSONDict | None,
-        record_media: Callable[[int, set[str]], None],
     ) -> None:
+        self.tb = tb
         self.post = post
-        self.options = options
+        self.options = tb.options
         self.backup_account = backup_account
         self.prev_archive = prev_archive
-        self.pa_options = pa_options
-        self.record_media = record_media
+        self.pa_options = tb.pa_options
+        self.record_media = tb.record_media
         self.post_media: set[str] = set()
         self.creator = post.get('blog_name') or post['tumblelog']
         self.ident = str(post['id'])
         self.url = post['post_url']
         self.shorturl = post['short_url']
         self.typ = str(post['type'])
-        self.date: float = post['liked_timestamp' if options.likes else 'timestamp']
+        self.date: float = post['liked_timestamp' if tb.options.likes else 'timestamp']
         self.isodate = datetime.utcfromtimestamp(self.date).isoformat() + 'Z'
         self.tm = time.localtime(self.date)
         self.title = ''
@@ -1486,9 +1517,9 @@ class TumblrPost:
         self.reblogged_root = post.get('reblogged_root_url')
         self.source_title = post.get('source_title', '')
         self.source_url = post.get('source_url', '')
-        self.file_name = join(self.ident, dir_index) if options.dirs else self.ident + post_ext
-        self.llink = self.ident if options.dirs else self.file_name
-        self.media_dir = join(post_dir, self.ident) if options.dirs else media_dir
+        self.file_name = join(self.ident, dir_index) if tb.options.dirs else self.ident + post_ext
+        self.llink = self.ident if tb.options.dirs else self.file_name
+        self.media_dir = join(post_dir, self.ident) if tb.options.dirs else media_dir
         self.media_url = urlpathjoin(save_dir, self.media_dir)
         self.media_folder = path_to(self.media_dir)
 
@@ -1518,6 +1549,30 @@ class TumblrPost:
                     elt = re.sub(r"""(?i)(<source\s(?:[^>]*\s)?src\s*=\s*["'])(.*?)(["'][^>]*>)""",
                                  self.get_inline_video, elt)
                 append(elt, fmt)
+
+        def maybe_try_get_media_url_video(tumblr_vid_url: str | None) -> str | None:
+            src = None
+            if (
+                (self.options.save_video or self.options.save_video_tumblr)
+                and tumblr_vid_url is not None
+            ):
+                src = self.get_media_url(tumblr_vid_url, '.mp4')
+            elif self.options.save_video:
+                src = self.get_youtube_url(self.url)
+                if not src:
+                    logger.warn('Unable to download video in post #{}\n'.format(self.ident))
+            return src
+
+        def try_get_media_url_tumblr_audio(audio_url: str) -> str | None:
+            src = None
+            if audio_url.startswith('https://a.tumblr.com/'):
+                # npf posts have "?play_key=...", strip it
+                audio_url = urlunparse(urlparse(audio_url)._replace(query=None))  # type: ignore[arg-type, assignment]
+                src = self.get_media_url(audio_url, '.mp3')
+            elif audio_url.startswith('https://www.tumblr.com/audio_file/'):
+                audio_url = 'https://a.tumblr.com/{}o1.mp3'.format(urlbasename(urlparse(audio_url).path))
+                src = self.get_media_url(audio_url, '.mp3')
+            return src
 
         if self.typ == 'text':
             self.title = get_try('title')
@@ -1549,17 +1604,7 @@ class TumblrPost:
             append_try('source', '<p>%s</p>')
 
         elif self.typ == 'video':
-            src = ''
-            if (
-                (self.options.save_video or self.options.save_video_tumblr)
-                and post['video_type'] == 'tumblr'
-            ):
-                src = self.get_media_url(post['video_url'], '.mp4')
-            elif self.options.save_video:
-                src = self.get_youtube_url(self.url)
-                if not src:
-                    logger.warn('Unable to download video in post #{}\n'.format(self.ident))
-            if src:
+            if src := maybe_try_get_media_url_video(post['video_url'] if post['video_type'] == 'tumblr' else None):
                 append('<p><video controls><source src="%s" type=video/mp4>%s<br>\n<a href="%s">%s</a></video></p>' % (
                     src, 'Your browser does not support the video element.', src, 'Video file',
                 ))
@@ -1582,11 +1627,7 @@ class TumblrPost:
             audio_url = get_try('audio_url') or get_try('audio_source_url')
             if self.options.save_audio:
                 if post['audio_type'] == 'tumblr':
-                    if audio_url.startswith('https://a.tumblr.com/'):
-                        src = self.get_media_url(audio_url, '.mp3')
-                    elif audio_url.startswith('https://www.tumblr.com/audio_file/'):
-                        audio_url = 'https://a.tumblr.com/{}o1.mp3'.format(urlbasename(urlparse(audio_url).path))
-                        src = self.get_media_url(audio_url, '.mp3')
+                    src = try_get_media_url_tumblr_audio(audio_url)
                 elif post['audio_type'] == 'soundcloud':
                     src = self.get_media_url(audio_url, '.mp3')
             player = get_try('player')
@@ -1608,6 +1649,73 @@ class TumblrPost:
                 '<br>\n'.join('%(label)s %(phrase)s' % d for d in post['dialogue']),
                 '<p>%s</p>',
             )
+
+        elif self.typ == 'blocks':
+            def preprocess(blocks: ContentBlockList) -> ContentBlockList:
+                blocks = [b.model_copy(deep=True) for b in blocks]
+                is_photoset = sum(1 for b in blocks if isinstance(b, ImageBlock)) > 1
+                img_offset = 1
+                for block in blocks:
+                    match block:
+                        case ImageBlock():
+                            widest = max(block.media, key=lambda m: m.width or 0)
+                            if self.options.save_images:
+                                widest.url = self.get_image_url(widest.url, img_offset if is_photoset else 0)
+                            block.media = [widest]
+                            img_offset += 1
+                        case VideoBlock(media=VisualMedia(url=video_url)):
+                            if src := maybe_try_get_media_url_video(video_url):
+                                block.media.url = src  # type: ignore[union-attr]
+                        case AudioBlock(media=VisualMedia(url=audio_url)) if self.options.save_audio:
+                            if src := try_get_media_url_tumblr_audio(audio_url):
+                                block.media.url = src  # type: ignore[union-attr]
+                return blocks
+
+            BlogInfo = TypedDict('BlogInfo', {'name': str, 'url': str | None}, total=False)
+
+            def get_blog(p: dict[str, Any]) -> BlogInfo:
+                """Get a blog object representing a post or trail item."""
+                _undefined = object()
+                if (b := p.get('blog', _undefined)) is not _undefined:
+                    return b
+                b = p['broken_blog']
+                b.setdefault('url', None)
+                return b
+
+            renderer = self.tb.get_npf_renderer(self.backup_account)
+            TrailContent = NamedTuple('TrailContent', [('blog', BlogInfo), ('content', str), ('post_id', str | None)])
+            rendered_content: list[TrailContent] = [
+                TrailContent(
+                    blog=get_blog(p),
+                    content=renderer(
+                        preprocess(_content_block_list_adapter.validate_python(p['content'])),
+                        NpfOptions(layout=p.get('layout', [])),
+                    ),
+                    post_id=pp.get('id') if (pp := p.get('post')) else p['id'],
+                ) for p in [*post.get('trail', []), post]
+            ]
+
+            def with_post(url: str, post_id: str) -> str:
+                parsed = urlparse(url)
+                return urlunparse(parsed._replace(path=urlpathjoin(parsed.path, post_id)))
+
+            if rendered_content:
+                body = ''
+                while True:
+                    last_post = rendered_content.pop(0)
+                    body += f'\n{last_post.content}'
+                    if not rendered_content:
+                        break
+                    href = ''
+                    if (url := last_post.blog['url']) is not None and (pid := last_post.post_id) is not None:
+                        href = f' href={quoteattr(with_post(url, pid))}'
+                    body = (
+                        f'<p><a{href} class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p>' +
+                        f'<blockquote>{body}</blockquote>'
+                    )
+
+                post['body'] = body
+                append_try('body')
 
         else:
             logger.warn("Unknown post type '{}' in post #{}\n".format(self.typ, self.ident))
@@ -1661,14 +1769,14 @@ class TumblrPost:
                 ydl.extract_info(youtube_url, download=True)
             except Exception:
                 return ''
-        return urlpathjoin(self.media_url, split(media_filename)[1])
+        return quote(urlpathjoin(self.media_url, split(media_filename)[1]))
 
     def get_media_url(self, media_url, extension):
         if not media_url:
             return ''
         saved_name = self.download_media(media_url, extension=extension)
         if saved_name is not None:
-            return urlpathjoin(self.media_url, saved_name)
+            return quote(urlpathjoin(self.media_url, saved_name))
         return media_url
 
     def get_image_url(self, image_url, offset):
@@ -1678,7 +1786,7 @@ class TumblrPost:
         if saved_name is not None:
             if self.options.exif and saved_name.endswith('.jpg'):
                 add_exif(join(self.media_folder, saved_name), set(self.tags), self.options.exif)
-            return urlpathjoin(self.media_url, saved_name)
+            return quote(urlpathjoin(self.media_url, saved_name))
         return image_url
 
     @staticmethod
@@ -1710,7 +1818,7 @@ class TumblrPost:
             return match.group(0)
         # get rid of autoplay and muted attributes to align with normal video
         # download behaviour
-        el = '%s%s/%s%s' % (match.group(1), self.media_url, saved_name, match.group(3))
+        el = '%s%s%s' % (match.group(1), quote(urlpathjoin(self.media_url, saved_name)), match.group(3))
         return el.replace('autoplay="autoplay"', '').replace('muted="muted"', '')
 
     def get_inline_video(self, match):
@@ -1736,8 +1844,7 @@ class TumblrPost:
             # Insert the query string to avoid ambiguity for certain URLs (e.g. SoundCloud embeds).
             query_sep = '@' if os.name == 'nt' else '?'
             if ext:
-                extwdot = '.{}'.format(ext)
-                fname = fname[:-len(extwdot)] + query_sep + parsed_url.query + extwdot
+                fname = fname[:-len(ext)] + query_sep + parsed_url.query + ext
             else:
                 fname = fname + query_sep + parsed_url.query
         if image_names == 'i':
@@ -1906,12 +2013,11 @@ class TumblrPost:
         post += '\n</article>\n'
         return post
 
-    @staticmethod
-    def tag_link(tag):
+    def tag_link(self, tag):
         tag_disp = escape(TAG_FMT.format(tag))
         if not TAGLINK_FMT:
             return tag_disp + ' '
-        url = TAGLINK_FMT.format(domain=blog_name, tag=quote(to_bytes(tag)))
+        url = TAGLINK_FMT.format(domain=get_dotted_blogname(self.backup_account), tag=quote(to_bytes(tag)))
         return '<a href=%s>%s</a>\n' % (url, tag_disp)
 
     def get_path(self):
@@ -2270,7 +2376,7 @@ def main():
     parser.add_argument('--no-copy-notes', action='store_false', default=None, dest='copy_notes',
                         help=argparse.SUPPRESS)
     parser.add_argument('--notes-limit', type=int, metavar='COUNT', help='limit requested notes to COUNT, per-post')
-    parser.add_argument('--cookiefile', help='cookie file for youtube-dl, --save-notes, and svc API')
+    parser.add_argument('--cookiefile', help='cookie file for youtube-dl, --save-notes, and internal API')
     parser.add_argument('-j', '--json', action='store_true', help='save the original JSON source')
     parser.add_argument('-b', '--blosxom', action='store_true', help='save the posts in blosxom format')
     parser.add_argument('-r', '--reverse-month', action='store_false',
@@ -2389,7 +2495,7 @@ def main():
         parser.error('--id-file not implemented for likes')
     if options.copy_notes is None:
         # Default to True if we may regenerate posts
-        options.copy_notes = options.reuse_json and not (options.no_post_clobber or options.mtime_fix)
+        options.copy_notes = options.reuse_json and not options.no_post_clobber
 
     # NB: this is done after setting implied options
     orig_options = vars(options).copy()

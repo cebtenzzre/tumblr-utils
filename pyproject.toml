@@ -1,48 +1,65 @@
 [project]
 name = "tumblr-backup"
-version = "1.0.7"
+version = "1.1.0"
 description = "An advanced tool for backing up Tumblr blogs."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+license-files = [
+    "LICENSE",
+    "3rdparty/npf2html/LICENSE",
+]
 classifiers = [
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "filetype~=1.2",
     "platformdirs~=4.2",
-    "requests~=2.31",
+    "pydantic>=2.12.3,<3",
+    "requests>=2.32.5,<3",
+    "typing_extensions>=4.5.0,<5",
     "urllib3>=2.2.2,<3",
 ]
 
 [project.optional-dependencies]
-bs4 = ["beautifulsoup4~=4.12", "lxml~=5.1"]
-exif = ["py3exiv2~=0.12"]
-jq = ["jq~=1.6"]
-video = ["yt_dlp>=2023.12.30"]
-all = ["tumblr-backup[bs4,exif,jq,video]"]
+bs4 = [
+    "beautifulsoup4>=4.14.2,<5",
+    "lxml>=6.0.2,<6.1",
+]
+dash = [
+    "quickjs>=1.19.4,<2",
+]
+exif = [
+    "py3exiv2~=0.12",
+]
+jq = [
+    "jq~=1.6",
+]
+video = [
+    "yt_dlp>=2023.12.30",
+]
+all = [
+    "tumblr-backup[bs4,dash,exif,jq,video]",
+]
 dev = [
     "tumblr-backup[all]",
 
     # dev tools
-    "flake8~=7.0",
-    "mypy~=1.9",
-    "pytype>=2024.2.27",
-    "wemake-python-styleguide~=0.18",
+    "flake8==7.3.0",
+    "mypy==1.18.2",
+    "wemake-python-styleguide==1.4.0",
 
     # type stubs and other optional modules
-    "lxml-stubs~=0.5",
-    "pysocks~=1.7",
-    "types-beautifulsoup4~=4.12",
-    "types-requests~=2.31",
+    "mini-racer>=0.12.4",
+    "pysocks>=1.7.1,<2",
+    "types-lxml==2025.08.25",
+    "types-requests>=2.32.4.20250913,<3",
     "youtube_dl>=2021.12.17",
-    "typing_extensions>=3.10.0.0,<5",
 ]
 
 [project.urls]
@@ -57,6 +74,15 @@ tb-login = "tumblr_backup.login:main"
 [build-system]
 requires = ["setuptools>=43.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+tumblr_backup = [
+    "assets/npf2html.iife.js",
+    "assets/npf2html.iife.js.map",
+]
 
 [tool.mypy]
 files = 'tumblr_backup'
