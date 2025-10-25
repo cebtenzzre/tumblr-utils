@@ -5,6 +5,10 @@ description = "An advanced tool for backing up Tumblr blogs."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-only"
+license-files = [
+    "LICENSE",
+    "3rdparty/npf2html/LICENSE",
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -51,6 +55,7 @@ dev = [
     "wemake-python-styleguide==1.4.0",
 
     # type stubs and other optional modules
+    "mini-racer>=0.12.4",
     "pysocks>=1.7.1,<2",
     "types-lxml==2025.08.25",
     "types-requests>=2.32.4.20250913,<3",
@@ -72,10 +77,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 include-package-data = true
-license-files = [
-    "LICENSE",
-    "3rdparty/npf2html/LICENSE",
-]
 
 [tool.setuptools.package-data]
 tumblr_backup = [
