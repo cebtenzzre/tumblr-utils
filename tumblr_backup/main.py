@@ -1212,7 +1212,11 @@ class TumblrBackup:
                             account=True)
             else:
                 # Get the highest post id already saved
-                ident_max = max(int(splitext(split(f)[1])[0]) for f in post_glob)
+                if self.options.dirs:
+                    ident_max = max(int(split(split(f)[0])[1]) for f in post_glob)
+                else:
+                    ident_max = max(int(splitext(split(f)[1])[0]) for f in post_glob)
+
                 logger.info('Backing up posts after id={}\n'.format(ident_max), account=True)
 
         if self.options.resume:
