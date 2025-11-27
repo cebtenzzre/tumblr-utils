@@ -639,22 +639,34 @@ def save_style():
         """))
 
 
-def find_files(path, match=None):
+def find_files(
+    path: str | os.PathLike[str],
+    match: Callable[[str], bool] | None = None,
+    *,
+    type: Literal['files', 'dirs'] = 'files',
+) -> Iterator[str]:
     try:
         it = os.scandir(path)
     except FileNotFoundError:
         return  # ignore nonexistent dir
+    type_matcher = dict(files=os.DirEntry.is_file, dirs=os.DirEntry.is_dir)[type]
     with it:
-        yield from (e.path for e in it if match is None or match(e.name))
+        for e in it:
+            if type_matcher(e) and (match is None or match(e.name)):
+                yield e.path
 
 
 def find_post_files(dirs: bool) -> Iterator[str]:
     path = path_to(post_dir)
     if not dirs:
-        yield from find_files(path, lambda n: n.endswith(post_ext))
+        def is_post_file(name: str) -> bool:
+            stem, ext = splitext(name)
+            return stem.isdigit() and ext == post_ext
+
+        yield from find_files(path, is_post_file)
         return
 
-    indexes = (join(e, dir_index) for e in find_files(path))
+    indexes = (join(e, dir_index) for e in find_files(path, str.isdigit, type='dirs'))
     yield from filter(os.path.exists, indexes)
 
 
