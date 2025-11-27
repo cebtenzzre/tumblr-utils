@@ -16,7 +16,8 @@ from requests.exceptions import RequestException
 from urllib3 import Retry, Timeout
 from urllib3.exceptions import HTTPError, InsecureRequestWarning
 
-from .util import LogLevel, is_dns_working, make_requests_session, setup_urllib3_ssl, to_bytes
+from .logging import LogLevel
+from .util import is_dns_working, make_requests_session, setup_urllib3_ssl, to_bytes
 
 setup_urllib3_ssl()
 

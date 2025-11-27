@@ -24,7 +24,8 @@ from urllib3.exceptions import (ConnectTimeoutError, HeaderParsingError, HTTPErr
                                 MaxRetryError)
 from urllib3.util.response import assert_header_parsing
 
-from .util import LogLevel, enospc, fsync, is_dns_working, no_internet, opendir, setup_urllib3_ssl, try_unlink
+from .logging import LogLevel
+from .util import enospc, fsync, is_dns_working, no_internet, opendir, setup_urllib3_ssl, try_unlink
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias

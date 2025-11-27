@@ -54,9 +54,23 @@ from .npf.models import (
     _content_block_list_adapter,
 )
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
-from .util import (AsyncCallable, LockedQueue, LogLevel, MultiCondition, copyfile, enospc, fdatasync, fsync,
-                   have_module, is_dns_working, make_requests_session, no_internet, opendir, to_bytes)
+from .util import (
+    AsyncCallable,
+    LockedQueue,
+    MultiCondition,
+    copyfile,
+    enospc,
+    fdatasync,
+    fsync,
+    have_module,
+    is_dns_working,
+    make_requests_session,
+    no_internet,
+    opendir,
+    to_bytes,
+)
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
+from .logging import LogLevel, logger
 
 if TYPE_CHECKING:
     from bs4 import Tag
@@ -165,54 +179,6 @@ def load_bs4(reason):
     return BeautifulSoup
 
 
-class Logger:
-    def __init__(self, quiet=False, file=sys.stdout):
-        self.quiet = quiet
-        self.file = file
-        self.lock = threading.Lock()
-        self.backup_account: str | None = None
-        self.status_msg: str | None = None
-
-    def log(self, level: LogLevel, msg: str, account: bool = False) -> None:
-        if self.quiet and level < LogLevel.WARN:
-            return
-        with self.lock:
-            for line in msg.splitlines(True):
-                self._print(line, account)
-            if self.status_msg:
-                self._print(self.status_msg, account=True)
-            sys.stdout.flush()
-
-    def info(self, msg, account=False):
-        self.log(LogLevel.INFO, msg, account)
-
-    def warn(self, msg, account=False):
-        self.log(LogLevel.WARN, msg, account)
-
-    def error(self, msg, account=False):
-        self.log(LogLevel.ERROR, msg, account)
-
-    def status(self, msg):
-        self.status_msg = msg
-        self.log(LogLevel.INFO, '')
-
-    def _print(self, msg, account=False):
-        if account:  # Optional account prefix
-            msg = '{}: {}'.format(self.backup_account, msg)
-
-        # Separate terminator
-        it = (i for i, c in enumerate(reversed(msg)) if c not in '\r\n')
-        try:
-            idx = len(msg) - next(it)
-        except StopIteration:
-            idx = 0
-        msg, term = msg[:idx], msg[idx:]
-
-        pad = ' ' * (80 - len(msg))  # Pad to 80 chars
-        print(msg + pad + term, end='', file=self.file)
-
-
-logger = Logger()
 
 
 def mkdir(dir_, recursive=False):
@@ -566,7 +532,7 @@ class ApiParser:
                 treset = datetime.now() + timedelta(seconds=freset)
                 msg = 'at {}'.format(treset.ctime())
             raise RuntimeError('{}: Daily API ratelimit exceeded. Resume with --continue after reset {}.\n'.format(
-                logger.backup_account, msg,
+                logger._backup_account, msg,
             ))
 
         # Hourly ratelimit
@@ -590,7 +556,7 @@ class ApiParser:
         if sleep_dur > 3600:
             treset = datetime.now() + timedelta(seconds=sleep_dur)
             raise RuntimeError('{}: Refusing to sleep for {}. Resume with --continue at {}.'.format(
-                logger.backup_account, sleep_dur_str, treset.ctime(),
+                logger._backup_account, sleep_dur_str, treset.ctime(),
             ))
 
         logger.warn('Hit hourly ratelimit, sleeping for {} as requested\n'.format(sleep_dur_str), account=True)
@@ -2456,10 +2422,10 @@ def main():
     if not blogs:
         parser.error('Missing blog-name')
 
-    logger.quiet = options.quiet
+    logger.set_quiet(options.quiet)
     if options.json_info:
         options.quiet = True
-        logger.file = sys.stderr
+        logger.set_file(sys.stderr)
 
     if options.auto is not None and options.auto != time.localtime().tm_hour:
         options.incremental = True
@@ -2537,7 +2503,7 @@ def main():
     tb = TumblrBackup(options, orig_options, parser.get_default)
     try:
         for i, account in enumerate(blogs):
-            logger.backup_account = account
+            logger.set_backup_account(account)
             tb.backup(account, options.prev_archives[i] if options.prev_archives else None)
     except KeyboardInterrupt:
         return EXIT_INTERRUPT

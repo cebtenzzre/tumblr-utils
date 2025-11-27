@@ -11,14 +11,14 @@ import time
 import warnings
 from abc import ABC, abstractmethod
 from collections import deque
-from enum import Enum
-from functools import total_ordering
 from http.cookiejar import MozillaCookieJar
 from importlib.machinery import PathFinder
 from typing import TYPE_CHECKING, Any, Deque, Generic, TypeVar
 
 from requests.adapters import HTTPAdapter
 from urllib3.exceptions import DependencyWarning
+
+from .logging import logger
 
 if sys.platform == 'darwin':
     import fcntl
@@ -158,7 +158,7 @@ class NoInternet(WaitOnMainThread):
     def _wait():
         # Having no internet is a temporary system error
         # Wait 30 seconds at first, then exponential backoff up to 15 minutes
-        print('DNS probe finished: No internet. Waiting...', file=sys.stderr)
+        logger.info('DNS probe finished: No internet. Waiting...\n')
         sleep_time = 30
         while True:
             time.sleep(sleep_time)
@@ -174,7 +174,7 @@ class Enospc(WaitOnMainThread):
             # Pausing or consuming input does no good during unattended execution.
             # We have no hope of recovering, so raise an uncaught exception.
             raise RuntimeError(OSError(errno.ENOSPC, os.strerror(errno.ENOSPC)))
-        print('Error: No space left on device. Press Enter to try again...', file=sys.stderr)
+        logger.info('Error: No space left on device. Press Enter to try again...\n')
         input()
 
 
@@ -246,16 +246,6 @@ def make_requests_session(session_type, retry, timeout, verify, user_agent, cook
     return session
 
 
-@total_ordering
-class LogLevel(Enum):
-    INFO = 0
-    WARN = 1
-    ERROR = 2
-
-    def __lt__(self, other):
-        if type(self) is type(other):
-            return self.value < other.value
-        return NotImplemented
 
 
 def fsync(fd):
