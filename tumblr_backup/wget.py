@@ -25,7 +25,7 @@ from urllib3.exceptions import (ConnectTimeoutError, HeaderParsingError, HTTPErr
 from urllib3.util.response import assert_header_parsing
 
 from .logging import LogLevel
-from .util import enospc, fsync, is_dns_working, no_internet, opendir, setup_urllib3_ssl, try_unlink
+from .util import enospc, fsync, is_tumblr_reachable, tumblr_unreachable, opendir, setup_urllib3_ssl, try_unlink
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
@@ -861,10 +861,10 @@ def urlopen(url, use_dns_check: bool, headers: Optional[Dict[str, str]] = None, 
         try:
             return poolman.request('GET', url, headers=req_headers, retries=HTTP_RETRY, **kwargs)
         except HTTPError:
-            if is_dns_working(timeout=5, check=use_dns_check):
+            if is_tumblr_reachable(timeout=5, check=use_dns_check):
                 raise
-            # Having no internet is a temporary system error
-            no_internet.signal()
+            # Tumblr being unreachable is a temporary error
+            tumblr_unreachable.signal()
 
 
 # This functor is the primary API of this module.

@@ -63,9 +63,9 @@ from .util import (
     fdatasync,
     fsync,
     have_module,
-    is_dns_working,
+    is_tumblr_reachable,
     make_requests_session,
-    no_internet,
+    tumblr_unreachable,
     opendir,
     to_bytes,
 )
@@ -513,8 +513,8 @@ class ApiParser:
                         continue
                     return doc, status, resp.reason if doc is None else http.client.responses.get(status, '(unknown)')
             except HTTPError:
-                if not is_dns_working(timeout=5, check=self.options.use_dns_check):
-                    no_internet.signal()
+                if not is_tumblr_reachable(timeout=5, check=self.options.use_dns_check, session=self.session):
+                    tumblr_unreachable.signal()
                     continue
                 raise
 
@@ -1301,7 +1301,7 @@ class TumblrBackup:
             def sort_key(x): return x['liked_timestamp'] if self.options.likes else int(x['id'])
             oldest_date = None
             for p in sorted(posts, key=sort_key, reverse=True):
-                no_internet.check()
+                tumblr_unreachable.check()
                 enospc.check()
                 post = post_class(self, p, account, prev_archive)
                 oldest_date = post.date
@@ -1342,10 +1342,10 @@ class TumblrBackup:
 
                 with multicond:
                     while backup_pool.queue.qsize() >= backup_pool.queue.maxsize:
-                        no_internet.check(release=True)
+                        tumblr_unreachable.check(release=True)
                         enospc.check(release=True)
                         # All conditions false, wait for a change
-                        multicond.wait((backup_pool.queue.not_full, no_internet.cond, enospc.cond))
+                        multicond.wait((backup_pool.queue.not_full, tumblr_unreachable.cond, enospc.cond))
                     backup_pool.add_work(post.save_post)
 
                 self.post_count += 1
@@ -1397,10 +1397,10 @@ class TumblrBackup:
                     api_thread.put(MAX_POSTS, i, before, next_ident, next_query)
 
                     while not api_thread.response.qsize():
-                        no_internet.check(release=True)
+                        tumblr_unreachable.check(release=True)
                         enospc.check(release=True)
                         # All conditions false, wait for a change
-                        multicond.wait((api_thread.response.not_empty, no_internet.cond, enospc.cond))
+                        multicond.wait((api_thread.response.not_empty, tumblr_unreachable.cond, enospc.cond))
 
                     resp = api_thread.get(block=False)
 
@@ -1977,7 +1977,7 @@ class TumblrPost:
                                 f'[Note Scraper] Blocked by safe mode - scraping disabled for {self.backup_account}\n',
                             )
                 elif process.exitcode == 3:  # EXIT_NO_INTERNET
-                    no_internet.signal()
+                    tumblr_unreachable.signal()
                     continue
                 break
 
@@ -2143,16 +2143,16 @@ class ThreadPool:
             self.quit_flag = True
             self.quit.notify_all()
             while self.queue.unfinished_tasks:
-                no_internet.check(release=True)
+                tumblr_unreachable.check(release=True)
                 enospc.check(release=True)
                 # All conditions false, wait for a change
-                multicond.wait((self.queue.all_tasks_done, no_internet.cond, enospc.cond))
+                multicond.wait((self.queue.all_tasks_done, tumblr_unreachable.cond, enospc.cond))
 
     def cancel(self):
         with main_thread_lock:
             self.abort_flag = True
             self.quit.notify_all()
-            no_internet.destroy()
+            tumblr_unreachable.destroy()
             enospc.destroy()
 
         for i, t in enumerate(self.threads, start=1):
@@ -2335,7 +2335,7 @@ def main():
         return 0
 
 
-    no_internet.setup(main_thread_lock)
+    tumblr_unreachable.setup(main_thread_lock)
     enospc.setup(main_thread_lock)
 
     parser = ArgumentParser(usage='%(prog)s [options] blog-name ...',

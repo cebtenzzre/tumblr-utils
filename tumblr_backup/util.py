@@ -4,7 +4,6 @@ import errno
 import os
 import queue
 import shutil
-import socket
 import sys
 import threading
 import time
@@ -15,6 +14,7 @@ from http.cookiejar import MozillaCookieJar
 from importlib.machinery import PathFinder
 from typing import TYPE_CHECKING, Any, Deque, Generic, TypeVar
 
+import requests
 from requests.adapters import HTTPAdapter
 from urllib3.exceptions import DependencyWarning
 
@@ -24,7 +24,6 @@ if sys.platform == 'darwin':
     import fcntl
 
 if TYPE_CHECKING:
-    import requests
     from typing_extensions import TypeAlias
     swt_base = requests.Session
 
@@ -61,26 +60,34 @@ class LockedQueue(GenericQueue[T]):
         self.all_tasks_done = threading.Condition(lock)
 
 
-KNOWN_GOOD_NAMESERVER = '8.8.8.8'
-# DNS query for 'A' record of 'google.com'.
-# Generated using python -c "import dnslib; print(bytes(dnslib.DNSRecord.question('google.com').pack()))"
-DNS_QUERY = b'\xf1\xe1\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x06google\x03com\x00\x00\x01\x00\x01'
+def is_tumblr_reachable(
+    timeout: float | None = None,
+    check: bool = True,
+    session: requests.Session | None = None,
+) -> bool:
+    """Check if Tumblr API is reachable.
 
+    Args:
+        timeout: Request timeout in seconds (default: 5.0)
+        check: If False, assume Tumblr is reachable (skip check)
+        session: Optional requests.Session to use; falls back to ad-hoc request
 
-def is_dns_working(timeout=None, check=True):
+    Returns:
+        True if Tumblr API is reachable (2XX, 3XX, or 4XX response),
+        False otherwise (5XX, timeout, connection error, etc.)
+    """
     if not check:
-        return True  # assume internet is OK
+        return True  # assume Tumblr is reachable
 
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            if timeout is not None:
-                sock.settimeout(timeout)
-            sock.sendto(DNS_QUERY, (KNOWN_GOOD_NAMESERVER, 53))
-            sock.recvfrom(1)
-    except OSError:
+        sess = session if session is not None else requests
+        resp = sess.head('https://api.tumblr.com/', timeout=timeout or 5.0)
+        # Accept 2XX (success), 3XX (redirect), 4XX (client error - API is up but we're not authenticated)
+        # Reject 5XX (server error - Tumblr is down)
+        return resp.status_code < 500
+    except Exception:
+        # Any connection error, timeout, etc. means Tumblr is unreachable
         return False
-
-    return True
 
 
 class WaitOnMainThread(ABC):
@@ -153,16 +160,16 @@ class WaitOnMainThread(ABC):
         raise NotImplementedError
 
 
-class NoInternet(WaitOnMainThread):
+class TumblrUnreachable(WaitOnMainThread):
     @staticmethod
     def _wait():
-        # Having no internet is a temporary system error
+        # Tumblr being unreachable is a temporary error
         # Wait 30 seconds at first, then exponential backoff up to 15 minutes
-        logger.info('DNS probe finished: No internet. Waiting...\n')
+        logger.info('Tumblr API unreachable. Waiting...\n')
         sleep_time = 30
         while True:
             time.sleep(sleep_time)
-            if is_dns_working():
+            if is_tumblr_reachable():
                 break
             sleep_time = min(sleep_time * 2, 900)
 
@@ -178,7 +185,7 @@ class Enospc(WaitOnMainThread):
         input()
 
 
-no_internet = NoInternet()
+tumblr_unreachable = TumblrUnreachable()
 enospc = Enospc()
 
 

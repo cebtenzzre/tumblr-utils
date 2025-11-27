@@ -17,7 +17,7 @@ from urllib3 import Retry, Timeout
 from urllib3.exceptions import HTTPError, InsecureRequestWarning
 
 from .logging import LogLevel
-from .util import is_dns_working, make_requests_session, setup_urllib3_ssl, to_bytes
+from .util import is_tumblr_reachable, make_requests_session, setup_urllib3_ssl, to_bytes
 
 setup_urllib3_ssl()
 
@@ -238,7 +238,7 @@ def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookief
         except KeyboardInterrupt:
             sys.exit()  # Ignore these so they don't propogate into the parent
         except (HTTPError, RequestException) as e:
-            if not is_dns_working(timeout=5, check=use_dns_check):
+            if not is_tumblr_reachable(timeout=5, check=use_dns_check, session=crawler.session):
                 sys.exit(EXIT_NO_INTERNET)
             log(LogLevel.ERROR, crawler.lasturl, e)
             sys.exit()
