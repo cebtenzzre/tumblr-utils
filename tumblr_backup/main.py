@@ -57,14 +57,15 @@ from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .util import (
     AsyncCallable,
     LockedQueue,
-    MultiCondition,
     copyfile,
     enospc,
     fdatasync,
     fsync,
     have_module,
     is_tumblr_reachable,
+    main_thread_lock,
     make_requests_session,
+    multicond,
     tumblr_unreachable,
     opendir,
     to_bytes,
@@ -160,8 +161,6 @@ BACKUP_CHANGING_OPTIONS = (
 )
 
 wget_retrieve: WgetRetrieveWrapper | None = None
-main_thread_lock = threading.RLock()
-multicond = MultiCondition(main_thread_lock)
 disable_note_scraper: set[str] = set()
 disablens_lock = threading.Lock()
 downloading_media: set[str] = set()
@@ -2334,9 +2333,6 @@ def main():
             f.write('\n')
         return 0
 
-
-    tumblr_unreachable.setup(main_thread_lock)
-    enospc.setup(main_thread_lock)
 
     parser = ArgumentParser(usage='%(prog)s [options] blog-name ...',
                             description='Makes a local backup of Tumblr blogs.')

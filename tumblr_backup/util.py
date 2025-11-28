@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from http.cookiejar import MozillaCookieJar
 from importlib.machinery import PathFinder
-from typing import TYPE_CHECKING, Any, Deque, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Deque, Generic, Sequence, TypeVar, cast
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -26,6 +26,9 @@ if sys.platform == 'darwin':
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
     swt_base = requests.Session
+
+    class Condition(threading.Condition):
+        _waiters: NotifierWaiters
 
 
 def to_bytes(string, encoding='utf-8', errors='strict'):
@@ -91,12 +94,12 @@ def is_tumblr_reachable(
 
 
 class WaitOnMainThread(ABC):
-    def __init__(self):
-        self.cond: threading.Condition | None = None
-        self.flag: bool | None = False
+    cond: threading.Condition
+    flag: bool | None
 
-    def setup(self, lock=None):
+    def __init__(self, lock: threading.Lock | threading.RLock):
         self.cond = threading.Condition(lock)
+        self.flag = False
 
     def signal(self):
         assert self.cond is not None
@@ -104,13 +107,15 @@ class WaitOnMainThread(ABC):
             self._do_wait()
             return
 
-        with self.cond:
+        with multicond:
             if self.flag is None:
                 sys.exit(1)
             self.flag = True
-            self.cond.wait()
-            if self.flag is None:
-                sys.exit(1)
+            self.cond.notify_all()
+            while self.flag is not False:
+                if self.flag is None:
+                    sys.exit(1)
+                multicond.wait(self.cond)
 
     # Call on main thread when signaled or idle. If the lock is held, pass release=True.
     def check(self, release=False):
@@ -164,14 +169,14 @@ class TumblrUnreachable(WaitOnMainThread):
     @staticmethod
     def _wait():
         # Tumblr being unreachable is a temporary error
-        # Wait 30 seconds at first, then exponential backoff up to 15 minutes
+        # Exponential backoff: 1s, 2s, 4s, 8s, 15s (max)
         logger.info('Tumblr API unreachable. Waiting...\n')
-        sleep_time = 30
+        sleep_time = 1
         while True:
             time.sleep(sleep_time)
             if is_tumblr_reachable():
                 break
-            sleep_time = min(sleep_time * 2, 900)
+            sleep_time = min(sleep_time * 2, 15)
 
 
 class Enospc(WaitOnMainThread):
@@ -183,10 +188,6 @@ class Enospc(WaitOnMainThread):
             raise RuntimeError(OSError(errno.ENOSPC, os.strerror(errno.ENOSPC)))
         logger.info('Error: No space left on device. Press Enter to try again...\n')
         input()
-
-
-tumblr_unreachable = TumblrUnreachable()
-enospc = Enospc()
 
 
 # Set up ssl for urllib3. This should be called before using urllib3 or importing requests.
@@ -310,10 +311,31 @@ class NotifierWaiters(Deque[Any]):
 
 # Supports waiting on multiple threading.Conditions objects simultaneously
 class MultiCondition(threading.Condition):
+    """
+    A Condition that can wait on multiple child Conditions simultaneously.
+
+    After calling wait(children), the children's internal state is modified to
+    support the multi-wait mechanism. Children can still be notified directly
+    (notifications will wake the multi-waiter), but children should NOT be
+    waited on directly - always use multicond.wait(child) instead.
+    """
+
     def __init__(self, lock):  # noqa: WPS612
         super().__init__(lock)
 
-    def wait(self, children, timeout=None):  # type: ignore[override] # pytype: disable=signature-mismatch
+    def wait(  # type: ignore[override]
+        self, children: threading.Condition | Sequence[threading.Condition], timeout: float | None = None
+    ) -> None:
+        """
+        Wait on one or more child conditions simultaneously.
+
+        Args:
+            children: Sequence of Condition objects to wait on
+            timeout: Optional timeout in seconds
+        """
+        if not isinstance(children, Sequence):
+            children = [children]
+        children = cast('Sequence[Condition]', children)
         assert len(frozenset(id(c) for c in children)) == len(children), 'Children must be unique'
         assert all(c._lock is self._lock for c in children), 'All locks must be the same'  # type: ignore[attr-defined]
 
@@ -327,10 +349,10 @@ class MultiCondition(threading.Condition):
 
         super().wait(timeout)
 
-    def notify(self, n=1):
+    def notify(self, n: int = 1) -> None:
         raise NotImplementedError
 
-    def notify_all(self):
+    def notify_all(self) -> None:
         raise NotImplementedError
 
     notifyAll = notify_all  # noqa: N815
@@ -447,3 +469,10 @@ def copyfile(src, dst):
 
 def have_module(name):
     return PathFinder.find_spec(name) is not None
+
+
+# Global synchronization primitives
+main_thread_lock = threading.RLock()
+multicond = MultiCondition(main_thread_lock)
+tumblr_unreachable = TumblrUnreachable(main_thread_lock)
+enospc = Enospc(main_thread_lock)
