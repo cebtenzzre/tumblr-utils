@@ -1682,6 +1682,11 @@ class TumblrPost:
                         case VideoBlock(media=VisualMedia(url=video_url)):
                             if src := maybe_try_get_media_url_video(video_url):
                                 block.media.url = src  # type: ignore[union-attr]
+                        case VideoBlock(url=video_url) if self.options.save_video:
+                            if src := self.get_youtube_url(self.url):
+                                block.media = VisualMedia(url=src)  # type: ignore[union-attr]
+                            else:
+                                logger.warn(f'Unable to download video in post #{self.ident}\n')
                         case AudioBlock(media=VisualMedia(url=audio_url)) if self.options.save_audio:
                             if src := try_get_media_url_tumblr_audio(audio_url):
                                 block.media.url = src  # type: ignore[union-attr]
@@ -1767,7 +1772,6 @@ class TumblrPost:
 
         if TYPE_CHECKING:
             import youtube_dl
-            import youtube_dl.utils
         else:
             youtube_dl = import_youtube_dl()
 
@@ -1777,7 +1781,7 @@ class TumblrPost:
             result = ydl.extract_info(youtube_url, download=False)
             if 'entries' in result:
                 result = result['entries'][0]  # handle playlist
-            media_filename = youtube_dl.utils.sanitize_filename(filetmpl % result, restricted=True)
+            media_filename = ydl.prepare_filename(result)
         except Exception:
             return ''
 
