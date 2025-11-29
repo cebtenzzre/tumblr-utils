@@ -5,6 +5,7 @@ import argparse
 import calendar
 import contextlib
 import errno
+from contextlib import contextmanager
 import hashlib
 import http.client
 import itertools
@@ -25,6 +26,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import partial
 from multiprocessing.queues import SimpleQueue
 from os.path import join, split, splitext
 from pathlib import Path
@@ -165,6 +167,39 @@ disable_note_scraper: set[str] = set()
 disablens_lock = threading.Lock()
 downloading_media: set[str] = set()
 downloading_media_cond = threading.Condition()
+
+
+@contextmanager
+def acquire_media_download(media_path: str, *, check_exists: Callable[[], bool] | None = None) -> Iterator[bool]:
+    """
+    Context manager to serialize downloads of the same media file.
+
+    Waits until no other thread is downloading the same file, optionally checks
+    if the file now exists, and if not, marks it as in-progress. Yields True if
+    the caller should proceed with the download, False if file already exists.
+
+    Args:
+        media_path: Path to the media file being downloaded
+        check_exists: Optional callable that returns True if file already exists
+
+    Yields:
+        bool: True if caller should proceed with download, False to skip
+    """
+    with downloading_media_cond:
+        downloading_media_cond.wait_for(lambda: media_path not in downloading_media)
+        # After waiting, check if another thread already downloaded it
+        if check_exists is not None and check_exists():
+            yield False  # File exists, caller should skip
+            return
+        # Mark this file as being downloaded
+        downloading_media.add(media_path)
+
+    try:
+        yield True  # Proceed with download
+    finally:
+        with downloading_media_cond:
+            downloading_media.remove(media_path)
+            downloading_media_cond.notify_all()
 
 
 def load_bs4(reason):
@@ -1744,12 +1779,15 @@ class TumblrPost:
         except Exception:
             return ''
 
-        # check if a file with this name already exists
-        if not os.path.isfile(media_filename):
-            try:
-                ydl.extract_info(youtube_url, download=True)
-            except Exception:
-                return ''
+        # Prevent racing of existence check and download
+        with acquire_media_download(media_filename, check_exists=partial(os.path.isfile, media_filename)) as should_download:
+            if should_download:
+                # Proceed with download
+                try:
+                    ydl.extract_info(youtube_url, download=True)
+                except Exception:
+                    return ''
+
         return quote(urlpathjoin(self.media_url, split(media_filename)[1]))
 
     def get_media_url(self, media_url, extension):
@@ -1864,17 +1902,11 @@ class TumblrPost:
         media_path = path_to(*path_parts)
 
         # prevent racing of existence check and download
-        with downloading_media_cond:
-            while media_path in downloading_media:
-                downloading_media_cond.wait()
-            downloading_media.add(media_path)
-
-        try:
+        with acquire_media_download(media_path, check_exists=partial(os.path.exists, media_path)) as should_download:
+            if not should_download:
+                # Another thread already downloaded it
+                return path_parts[-1]
             return self._download_media_inner(url, get_path, path_parts, media_path)
-        finally:
-            with downloading_media_cond:
-                downloading_media.remove(media_path)
-                downloading_media_cond.notify_all()
 
     def get_post(self):
         """returns this post in HTML"""
