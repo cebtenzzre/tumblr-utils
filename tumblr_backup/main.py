@@ -1775,7 +1775,9 @@ class TumblrPost:
         ydl.add_default_info_extractors()
         try:
             result = ydl.extract_info(youtube_url, download=False)
-            media_filename = youtube_dl.utils.sanitize_filename(filetmpl % result['entries'][0], restricted=True)
+            if 'entries' in result:
+                result = result['entries'][0]  # handle playlist
+            media_filename = youtube_dl.utils.sanitize_filename(filetmpl % result, restricted=True)
         except Exception:
             return ''
 
