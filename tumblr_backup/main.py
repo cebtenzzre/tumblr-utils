@@ -25,7 +25,7 @@ from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from multiprocessing.queues import SimpleQueue
 from os.path import join, split, splitext
@@ -40,6 +40,7 @@ from urllib.parse import quote, urlencode, urlparse, urlunparse
 from xml.sax.saxutils import escape, quoteattr
 
 # third-party modules
+import colorama
 import filetype
 import platformdirs
 import requests
@@ -2324,6 +2325,62 @@ class IdFileCallback(argparse.Action):
             ))
 
 
+def update_config(config_file: Path, updates: dict[str, Any], success_msg: str | None = None) -> int:
+    """Update config file with given key-value pairs."""
+    with os.fdopen(os.open(config_file, os.O_RDWR | os.O_CREAT, 0o644), 'r+') as f:
+        cfg = None
+        try:
+            cfg = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            pass  # start fresh
+
+        if not isinstance(cfg, dict):
+            cfg = {}
+
+        cfg.update(updates)
+        f.seek(0)
+        f.truncate()
+        json.dump(cfg, f, indent=4)
+        f.write('\n')
+
+    if success_msg:
+        print(success_msg)
+    return 0
+
+
+def maybe_show_notice() -> None:
+    path = platformdirs.user_state_path('tumblr-backup', ensure_exists=True) / 'state.json'
+    with os.fdopen(os.open(path, os.O_RDWR | os.O_CREAT, 0o644), 'r+') as state_file:
+        saved_state = None
+        try:
+            saved_state = json.load(state_file)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            pass  # start fresh
+        state = saved_state if isinstance(saved_state, dict) else {}
+
+        last_shown = state.get('last_discord_notice')
+        now = datetime.now(timezone.utc)
+        if last_shown is None or datetime.fromtimestamp(last_shown, tz=timezone.utc) + timedelta(days=7) <= now:
+            # Update state
+            state['last_discord_notice'] = int(now.timestamp())
+            try:
+                state_file.seek(0)
+                state_file.truncate()
+                json.dump(state, state_file, indent=4)
+                state_file.write('\n')
+            except OSError:
+                pass  # silently fail
+            else:
+                print(
+                    f'{colorama.Style.BRIGHT}{colorama.Fore.YELLOW}'
+                    'Join the tumblr-backup Discord! https://discord.gg/UtzGeYBNvQ\n'
+                    f'{colorama.Style.DIM}{colorama.Fore.WHITE}'
+                    'Disable this notice with tumblr-backup --disable-notice'
+                    f'{colorama.Style.RESET_ALL}',
+                    file=sys.stderr,
+                )
+
+
 def main():
     global wget_retrieve
 
@@ -2348,29 +2405,18 @@ def main():
     config_file = Path(config_dir) / 'config.json'
 
     if '--set-api-key' in sys.argv[1:]:
-        # special argument parsing
         opt, *args = sys.argv[1:]
         if opt != '--set-api-key' or len(args) != 1:
             print(f'{Path(sys.argv[0]).name}: invalid usage', file=sys.stderr)
             return 1
         api_key, = args
+        return update_config(config_file, {'oauth_consumer_key': api_key})
 
-        try:
-            fd = os.open(config_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-            file_exists = False
-        except FileExistsError:
-            fd = os.open(config_file, os.O_RDWR, 0o644)
-            file_exists = True
-
-        with open(fd, 'r+') as f:
-            cfg = json.load(f) if file_exists else {}
-            cfg['oauth_consumer_key'] = api_key
-            f.seek(0)
-            f.truncate()
-            json.dump(cfg, f, indent=4)
-            f.write('\n')
-        return 0
-
+    if '--disable-notice' in sys.argv[1:]:
+        if len(sys.argv[1:]) != 1:
+            print(f'{Path(sys.argv[0]).name}: invalid usage', file=sys.stderr)
+            return 1
+        return update_config(config_file, {'disable_discord_notice': True}, 'Discord notice disabled.')
 
     parser = ArgumentParser(usage='%(prog)s [options] blog-name ...',
                             description='Makes a local backup of Tumblr blogs.')
@@ -2520,7 +2566,8 @@ def main():
 
     try:
         with open(config_file) as f:
-            api_key = json.load(f)['oauth_consumer_key']
+            config = json.load(f)
+            api_key = config['oauth_consumer_key']
     except (FileNotFoundError, KeyError):
         msg = f"""\
             API key not set. To use tumblr-backup:
@@ -2534,6 +2581,10 @@ def main():
     setup_wget(not options.no_ssl_verify, options.user_agent)
 
     ApiParser.setup(api_key, options.no_ssl_verify, options.user_agent, options.cookiefile)
+
+    if sys.stderr.isatty() and not config.get('disable_discord_notice', False):
+        maybe_show_notice()
+
     tb = TumblrBackup(options, orig_options, parser.get_default)
     try:
         for i, account in enumerate(blogs):
