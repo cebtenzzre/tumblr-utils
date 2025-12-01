@@ -822,6 +822,7 @@ def _retrieve_loop(
         else:
             # Give adjust_basename a read-only file handle
             pf = open(hstat.part_file.fileno(), 'rb', closefd=False)
+            pf.seek(0)
             new_dest_basename = adjust_basename(dest_basename, pf)
 
         # Sync the inode

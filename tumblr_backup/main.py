@@ -26,6 +26,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from filetype.types import image as image_types
 from functools import partial
 from multiprocessing.queues import SimpleQueue
 from os.path import join, split, splitext
@@ -34,7 +35,18 @@ from posixpath import basename as urlbasename, join as urlpathjoin, splitext as 
 from tempfile import NamedTemporaryFile
 from types import ModuleType
 from typing import (
-    TYPE_CHECKING, Any, Callable, ClassVar, ContextManager, Iterator, Literal, NamedTuple, TextIO, TypedDict, cast
+    TYPE_CHECKING,
+    Any,
+    BinaryIO,
+    Callable,
+    ClassVar,
+    ContextManager,
+    Iterator,
+    Literal,
+    NamedTuple,
+    TextIO,
+    TypedDict,
+    cast,
 )
 from urllib.parse import quote, urlencode, urlparse, urlunparse
 from xml.sax.saxutils import escape, quoteattr
@@ -2080,8 +2092,32 @@ class TumblrPost:
             # We don't have the media and we want it
             assert wget_retrieve is not None
             dstpath = open_file(lambda f: f, path_parts)
+
+            def adjust_basename(old_bn: str, f: BinaryIO) -> str:
+                """Map .pnj and .gifv extensions -> .jpg/.png and .gif respectively."""
+                stem, ext = splitext(old_bn)
+                header = f.read(4)
+                match ext.lower():
+                    case '.pnj' if image_types.Jpeg().match(header):
+                        ext = '.jpg'
+                    case '.pnj' if image_types.Png().match(header):
+                        ext = '.png'
+                    case '.gifv' if image_types.Gif().match(header):
+                        ext = '.gif'
+                return stem + ext
+
+            # Adjust filename extension for Tumblr media URLs based on actual content type
+            parsed_url = urlparse(url)
+            is_tumblr_media = parsed_url.hostname and parsed_url.hostname.endswith('.media.tumblr.com')
+
             try:
-                wget_retrieve(url, dstpath, post_id=self.ident, post_timestamp=self.post['timestamp'])
+                wget_retrieve(
+                    url,
+                    dstpath,
+                    post_id=self.ident,
+                    post_timestamp=self.post['timestamp'],
+                    adjust_basename=adjust_basename if is_tumblr_media else None,
+                )
             except WGError as e:
                 e.log()
                 return None
