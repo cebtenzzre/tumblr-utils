@@ -353,6 +353,7 @@ class ApiParser:
     TRY_LIMIT = 2
     session: ClassVar[requests.Session | None] = None
     api_key: ClassVar[str | None] = None
+    _community_label_checked: ClassVar[bool] = False
 
     def __init__(self, tb: TumblrBackup, account: str, options: Namespace):
         self.account = account
@@ -373,6 +374,22 @@ class ApiParser:
             requests.Session, HTTP_RETRY, HTTP_TIMEOUT,
             not no_ssl_verify, user_agent, cookiefile,
         )
+
+    def _check_community_labels(self) -> None:
+        """Check user's community label settings and warn if content will be blocked."""
+        assert self.session is not None
+        if self._community_label_checked:
+            return
+        self._community_label_checked = True
+        url = 'https://www.tumblr.com/api/v2/user/info'
+        with self.session.get(url, headers={'Authorization': f'Bearer {self.api_key}'}) as resp:
+            if resp.status_code != 200:
+                return
+            user = resp.json().get('response', {}).get('user', {})
+            visibility_setting = user.get('community_label_visibility_setting')
+            categories = user.get('community_label_categories', {})
+            if visibility_setting == 'block' or any(v == 'block' for v in categories.values()):
+                logger.warn('Your content label preferences hide some posts. They will not be backed up.\n')
 
     def read_archive(self, prev_archive):
         if self.options.reuse_json:
@@ -478,6 +495,8 @@ class ApiParser:
             # dashboard-only blogs are authenticated with a bearer token
             del params['api_key']
             headers['Authorization'] = f'Bearer {self.api_key}'
+            # Check community label settings on first dash api request
+            self._check_community_labels()
 
         try:
             doc, status, reason = self._get_resp(base, params, headers)
