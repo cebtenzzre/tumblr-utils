@@ -2336,7 +2336,7 @@ class RequestCallback(argparse.Action):
             return
 
         if tags:
-            request.setdefault(typ, []).extend(tags)
+            request.setdefault(typ, []).extend(map(str.casefold, tags))
         else:
             request[typ] = [TAG_ANY]
 
