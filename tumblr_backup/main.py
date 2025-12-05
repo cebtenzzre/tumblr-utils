@@ -8,6 +8,7 @@ import errno
 from contextlib import contextmanager
 import hashlib
 import http.client
+import importlib.metadata
 import itertools
 import json
 import locale
@@ -2475,6 +2476,8 @@ def main():
 
     parser = ArgumentParser(usage='%(prog)s [options] blog-name ...',
                             description='Makes a local backup of Tumblr blogs.')
+    parser.add_argument('--version', action='version',
+                        version=f'%(prog)s {importlib.metadata.version("tumblr-backup")}')
     postexist_group = parser.add_mutually_exclusive_group()
     reblog_group = parser.add_mutually_exclusive_group()
     parser.add_argument('-O', '--outdir', help='set the output directory (default: blog-name)')
