@@ -149,7 +149,7 @@ tag_index_dir = 'tags'
 post_ext = '.html'
 have_custom_css = False
 
-POST_TYPES = ('text', 'quote', 'link', 'answer', 'video', 'audio', 'photo', 'chat')
+POST_TYPES = ('text', 'quote', 'link', 'answer', 'video', 'audio', 'photo', 'chat', 'blocks')
 TYPE_ANY = 'any'
 TAG_ANY = '__all__'
 
