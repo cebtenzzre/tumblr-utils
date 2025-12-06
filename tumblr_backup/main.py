@@ -1026,7 +1026,7 @@ class TumblrBackup:
         if renderer is None:
             logger.error(
                 f'Dashboard-only blog {account} requires a js engine for npf2html.\n'
-                'Try `pip install "tumblr-backup[dashboard]"`\n'
+                'Try `pip install "tumblr-backup[dash]"`\n'
             )
             sys.exit(1)
         if not isinstance(renderer, QuickJsNpfRenderer):
