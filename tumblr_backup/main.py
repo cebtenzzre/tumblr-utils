@@ -721,7 +721,7 @@ def get_avatar(account: str, prev_archive: str | os.PathLike[str], no_get: bool)
         return  # Don't download the avatar
 
     url = 'https://api.tumblr.com/v2/blog/%s/avatar' % get_dotted_blogname(account)
-    avatar_dest = avatar_fpath = open_file(lambda f: f, (theme_dir, avatar_base))
+    avatar_dest = open_file(lambda f: f, (theme_dir, avatar_base))
 
     # Remove old avatars
     avatar_matches = find_files(theme_dir, match_avatar)
@@ -732,8 +732,8 @@ def get_avatar(account: str, prev_archive: str | os.PathLike[str], no_get: bool)
         # Give it an extension
         kind = filetype.guess(f)
         if kind:
-            return avatar_fpath + '.' + kind.extension
-        return avatar_fpath
+            return old_bn + '.' + kind.extension
+        return old_bn
 
     # Download the image
     assert wget_retrieve is not None
