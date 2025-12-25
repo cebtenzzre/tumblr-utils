@@ -134,8 +134,9 @@ class WebCrawler:
                 parsed_uri = urlparse(resp.url)
                 if (
                     re.match(r'(www\.)?tumblr\.com', parsed_uri.netloc)
-                    and re.match(r'/safe-mode$|/[a-z0-9-]+/[0-9]+(/|$)', parsed_uri.path)
+                    and re.match(r'/safe-mode$', parsed_uri.path)
                 ):
+                    log(LogLevel.WARN, iri, 'Tumblr safe mode detected - redirected to:  {}'.format(resp.url))
                     sys.exit(EXIT_SAFE_MODE)
                 if (
                     resp.status_code in (420, 429) and try_count < self.TRY_LIMIT
@@ -143,6 +144,9 @@ class WebCrawler:
                 ):
                     continue
                 if 200 <= resp.status_code < 300:
+                    # Log the final URL after any redirects
+                    if resp.url != uri:
+                        log(LogLevel.INFO, iri, 'Request was redirected from {} to {}'.format(uri, resp.url))
                     return resp.content.decode('utf-8', errors='ignore')
                 log(LogLevel.WARN, iri, 'Unexpected response status: HTTP {} {}{}'.format(
                     resp.status_code, resp.reason,
@@ -173,9 +177,19 @@ class WebCrawler:
         return urlunsplit(spl._replace(query=urlencode(query, doseq=True)))
 
     def append_notes(self, soup, notes_list, notes_url):
-        notes_ol = cast(Tag, soup.find('ol', class_='notes'))
+        notes_ol = cast(Tag, soup. find('ol', class_='notes'))
         if notes_ol is None:
-            log(LogLevel.WARN, notes_url, 'Response HTML does not have a notes list')
+            # Diagnostic: Check what we actually have in the response
+            # Look for various indicators of post content
+            has_post_content = soup.find('article') or soup.find('div', class_='post-container') or soup.find('div', class_='post')
+            has_any_ol = bool(soup.find_all('ol'))
+            
+            if has_post_content and not has_any_ol: 
+                log(LogLevel.WARN, notes_url, 'Likely dashboard-only blog - notes not publicly available')
+            elif not has_post_content and not has_any_ol:
+                log(LogLevel.WARN, notes_url, 'Response appears to be a redirect or error page, no post content found')
+            else:
+                log(LogLevel.WARN, notes_url, 'Response HTML does not have a notes list')
             return False
         notes = notes_ol.find_all('li')
         for note in reversed(notes):
@@ -220,7 +234,7 @@ class WebCrawler:
         return ''.join(notes_list)
 
 
-def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check):
+def main(stdout_filename, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check):
     global post_url, ident, msg_queue
     msg_queue, post_url, ident = msg_queue_, post_url_, ident_
 
@@ -249,5 +263,9 @@ def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookief
     finally:
         msg_queue._writer.close()  # type: ignore[union-attr]
 
-    with os.fdopen(stdout_fd, 'w') as stdout:
+    with open(stdout_filename, 'w') as stdout:
         print(notes, end='', file=stdout)
+        stdout.flush()
+
+    # Ensure data is written to disk
+    os.fsync(os.open(stdout_filename, os.O_RDONLY))
