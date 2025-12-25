@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import sys
 import time
@@ -248,5 +249,5 @@ def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookief
     finally:
         msg_queue._writer.close()  # type: ignore[union-attr]
 
-    with open(stdout_fd, 'w') as stdout:
+    with os.fdopen(stdout_fd, 'w') as stdout:
         print(notes, end='', file=stdout)
