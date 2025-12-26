@@ -2500,14 +2500,11 @@ def main():
     parser.add_argument('--save-video', action='store_true', help='save all video files')
     parser.add_argument('--save-video-tumblr', action='store_true', help='save only Tumblr video files')
     parser.add_argument('--save-audio', action='store_true', help='save audio files')
-    parser.add_argument(
-        '--save-notes',
-        dest='save_notes',
-        nargs='?',
-        const='all',
-        choices=['all', 'likes', 'reblogs', 'conversation'],
-        default=None,
-        help='Scrape notes from posts:  all (default if flag used), likes, reblogs, or conversation (reblogs with commentary)'
+    parser.add_argument('--save-notes', dest='save_notes', nargs='?',
+        const='all', choices=['all', 'likes', 'reblogs', 'conversation'], default=None,
+        help=f'save a list of notes for each post (specify what notes to save with --save-notes=TYPE); '
+             f'\'all\' is the default if flag used, \'conversation\' saves only reblogs with commentary and replies; '
+             f'does not work on dashboard-only blogs'
     )
     parser.add_argument('--copy-notes', action='store_true', default=None,
                         help='copy the notes list from a previous archive (inverse: --no-copy-notes)')
@@ -2549,28 +2546,28 @@ def main():
     parser.add_argument('-S', '--no-ssl-verify', action='store_true', help='ignore SSL verification errors')
     parser.add_argument('--prev-archives', action=CSVCallback, default=[], metavar='DIRS',
                         help='comma-separated list of directories (one per blog) containing previous blog archives')
-    parser.add_argument('--no-post-clobber', action='store_true', help='Do not re-download existing posts')
+    parser.add_argument('--no-post-clobber', action='store_true', help='do not re-download existing posts')
     parser.add_argument('--no-server-timestamps', action='store_false', dest='use_server_timestamps',
                         help="don't set local timestamps from HTTP headers")
-    parser.add_argument('--hostdirs', action='store_true', help='Generate host-prefixed directories for media')
-    parser.add_argument('--user-agent', help='User agent string to use with HTTP requests')
+    parser.add_argument('--hostdirs', action='store_true', help='generate host-prefixed directories for media')
+    parser.add_argument('--user-agent', help='user agent string to use with HTTP requests')
     parser.add_argument('--skip-dns-check', action='store_false', dest='use_dns_check',
-                        help='Skip DNS checks for internet access')
+                        help='skip DNS checks for internet access')
     parser.add_argument('--threads', type=int, default=20, help='number of threads to use for post retrieval')
     postexist_group.add_argument('--continue', action='store_true', dest='resume',
-                                 help='Continue an incomplete first backup')
+                                 help='continue an incomplete first backup')
     parser.add_argument('--ignore-diffopt', action='store_true',
-                        help='Force backup over an incomplete archive with different options')
-    parser.add_argument('--no-get', action='store_true', help="Don't retrieve files not found in --prev-archives")
+                        help='force backup over an incomplete archive with different options')
+    parser.add_argument('--no-get', action='store_true', help="don't retrieve files not found in --prev-archives")
     postexist_group.add_argument('--reuse-json', action='store_true',
-                                 help='Reuse the API responses saved with --json (implies --copy-notes)')
+                                 help='reuse the API responses saved with --json (implies --copy-notes)')
     parser.add_argument('--internet-archive', action='store_true',
-                        help='Fall back to the Internet Archive for Tumblr media 403 and 404 responses')
-    parser.add_argument('--media-list', action='store_true', help='Save post media URLs to media.json')
+                        help='fall back to the Internet Archive for Tumblr media 403 and 404 responses')
+    parser.add_argument('--media-list', action='store_true', help='save post media URLs to media.json')
     parser.add_argument('--id-file', action=IdFileCallback, dest='idents', metavar='FILE',
                         help='file containing a list of post IDs to save, one per line')
     parser.add_argument('--json-info', action='store_true',
-                        help="Just print some info for each blog, don't make a backup")
+                        help="just print some info for each blog, don't make a backup")
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
