@@ -2008,7 +2008,7 @@ class TumblrPost:
                 ns_msg_queue: SimpleQueue[tuple[LogLevel, str]] = multiprocessing.SimpleQueue()
                 try:
                     args = (
-                        ns_stdout_filename, ns_msg_queue, self.url, self.ident, self. options.no_ssl_verify,
+                        ns_stdout_filename, ns_msg_queue, self.url, self.ident, self.options.no_ssl_verify,
                         self.options.user_agent, self.options.cookiefile, self.options.notes_limit,
                         self.options.use_dns_check, self.options.save_notes,
                     )
@@ -2020,7 +2020,7 @@ class TumblrPost:
                 finally:
                     ns_msg_queue._writer.close()  # type: ignore[attr-defined]
 
-                try: 
+                try:
                     try:
                         while True:
                             level, msg = ns_msg_queue.get()
@@ -2036,7 +2036,7 @@ class TumblrPost:
                     with open(ns_stdout_filename) as stdout:
                         notes_html = stdout.read()
                 except:
-                    process. terminate()
+                    process.terminate()
                     process.join()
                     raise
                 finally:
@@ -2052,7 +2052,7 @@ class TumblrPost:
                     with disablens_lock:
                         # Check if another thread already set this
                         if self.backup_account not in disable_note_scraper:
-                            disable_note_scraper.add(self. backup_account)
+                            disable_note_scraper.add(self.backup_account)
                             logger.info(
                                 f'[Note Scraper] Blocked by safe mode - scraping disabled for {self.backup_account}\n',
                             )
