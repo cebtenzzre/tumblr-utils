@@ -2010,7 +2010,7 @@ class TumblrPost:
                     args = (
                         ns_stdout_filename, ns_msg_queue, self.url, self.ident, self. options.no_ssl_verify,
                         self.options.user_agent, self.options.cookiefile, self.options.notes_limit,
-                        self. options.use_dns_check,
+                        self.options.use_dns_check, self.options.save_notes,
                     )
                     process = multiprocessing.Process(target=note_scraper.main, args=args)
                     process.start()
@@ -2500,7 +2500,15 @@ def main():
     parser.add_argument('--save-video', action='store_true', help='save all video files')
     parser.add_argument('--save-video-tumblr', action='store_true', help='save only Tumblr video files')
     parser.add_argument('--save-audio', action='store_true', help='save audio files')
-    parser.add_argument('--save-notes', action='store_true', help='save a list of notes for each post')
+    parser.add_argument(
+        '--save-notes',
+        dest='save_notes',
+        nargs='?',
+        const='all',
+        choices=['all', 'likes', 'reblogs', 'conversation'],
+        default=None,
+        help='Scrape notes from posts:  all (default if flag used), likes, reblogs, or conversation (reblogs with commentary)'
+    )
     parser.add_argument('--copy-notes', action='store_true', default=None,
                         help='copy the notes list from a previous archive (inverse: --no-copy-notes)')
     parser.add_argument('--no-copy-notes', action='store_false', default=None, dest='copy_notes',
