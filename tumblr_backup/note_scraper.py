@@ -58,8 +58,9 @@ class WebCrawler:
 
     TRY_LIMIT = 10  # max attempts when ratelimited
 
-    def __init__(self, noverify, user_agent, cookiefile, notes_limit):
+    def __init__(self, noverify, user_agent, cookiefile, notes_limit, notes_mode):
         self.notes_limit = notes_limit
+        self.notes_mode = notes_mode
         self.lasturl = None
         self.session = make_requests_session(
             requests.Session, HTTP_RETRY, HTTP_TIMEOUT, not noverify, user_agent, cookiefile,
@@ -176,15 +177,30 @@ class WebCrawler:
             pass
         return urlunsplit(spl._replace(query=urlencode(query, doseq=True)))
 
+    def _matches_notes_mode(self, classes):
+        """Check if a note matches the current notes_mode filter."""
+        match self.notes_mode:
+            case 'all':
+                return True
+            case 'conversation':
+                return 'with_commentary' in classes or 'reply' in classes
+            case 'reblogs':
+                return 'reblog' in classes
+            case 'likes':
+                return 'like' in classes
+            case _:
+                # Unknown mode, include all
+                return True
+
     def append_notes(self, soup, notes_list, notes_url):
-        notes_ol = cast(Tag, soup. find('ol', class_='notes'))
+        notes_ol = cast(Tag, soup.find('ol', class_='notes'))
         if notes_ol is None:
-            # Diagnostic: Check what we actually have in the response
-            # Look for various indicators of post content
+            # Check if this looks like a dashboard-only blog response
+            # (no ol. notes, but post content is present)
             has_post_content = soup.find('article') or soup.find('div', class_='post-container') or soup.find('div', class_='post')
             has_any_ol = bool(soup.find_all('ol'))
-            
-            if has_post_content and not has_any_ol: 
+
+            if has_post_content and not has_any_ol:
                 log(LogLevel.WARN, notes_url, 'Likely dashboard-only blog - notes not publicly available')
             elif not has_post_content and not has_any_ol:
                 log(LogLevel.WARN, notes_url, 'Response appears to be a redirect or error page, no post content found')
@@ -192,6 +208,7 @@ class WebCrawler:
                 log(LogLevel.WARN, notes_url, 'Response HTML does not have a notes list')
             return False
         notes = notes_ol.find_all('li')
+        notes_added = 0
         for note in reversed(notes):
             if classes := note.get('class'):
                 if 'more_notes_link_container' in classes:
@@ -200,8 +217,12 @@ class WebCrawler:
                     if self.original_post_seen:
                         continue  # only show original post once
                     self.original_post_seen = True
+                # Filter by notes_mode
+                if not self._matches_notes_mode(classes):
+                    continue
             notes_list.append(note.prettify())
-        return True
+            notes_added += 1
+        return True, notes_added
 
     def get_notes(self, post_url):
         parsed_uri = urlparse(post_url)
@@ -209,6 +230,7 @@ class WebCrawler:
 
         notes_10k = 0
         notes_list: list[str] = []
+        filtered_notes_count = 0
 
         notes_url = post_url
         while True:
@@ -217,24 +239,27 @@ class WebCrawler:
                 break
 
             soup = BeautifulSoup(resp_str, 'lxml')
-            if not self.append_notes(soup, notes_list, notes_url):
+            result = self.append_notes(soup, notes_list, notes_url)
+            if not result or result[0] is False:
                 break
+            _, notes_added = result if isinstance(result, tuple) else (True, 0)
+            filtered_notes_count += notes_added
 
             old_notes_url, notes_url = notes_url, self.get_more_link(soup, base, notes_url)
             if (not notes_url) or notes_url == old_notes_url:
                 break
 
-            if len(notes_list) > (notes_10k + 1) * 10000:
+            if filtered_notes_count > (notes_10k + 1) * 10000:
                 notes_10k += 1
                 log(LogLevel.INFO, notes_url, 'Note: {} notes retrieved so far'.format(notes_10k * 10000))
-            if self.notes_limit is not None and len(notes_list) > self.notes_limit:
+            if self.notes_limit is not None and filtered_notes_count > self.notes_limit:
                 log(LogLevel.WARN, notes_url, 'Warning: Reached notes limit, stopping early.')
                 break
 
         return ''.join(notes_list)
 
 
-def main(stdout_filename, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check):
+def main(stdout_filename, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check, notes_mode='all'):
     global post_url, ident, msg_queue
     msg_queue, post_url, ident = msg_queue_, post_url_, ident_
 
@@ -246,7 +271,7 @@ def main(stdout_filename, msg_queue_, post_url_, ident_, noverify, user_agent, c
         warnings.filterwarnings('ignore', category=InsecureRequestWarning)
 
     try:
-        crawler = WebCrawler(noverify, user_agent, cookiefile, notes_limit)
+        crawler = WebCrawler(noverify, user_agent, cookiefile, notes_limit, notes_mode)
 
         try:
             notes = crawler.get_notes(post_url)
