@@ -1999,7 +1999,7 @@ class TumblrPost:
 
             # Scrape and save notes
             while True:
-                ns_stdout_rd, ns_stdout_wr = os.pipe()
+                ns_stdout_rd, ns_stdout_wr = multiprocessing.Pipe(duplex=False)
                 ns_msg_queue: SimpleQueue[tuple[LogLevel, str]] = multiprocessing.SimpleQueue()
                 try:
                     args = (
@@ -2010,11 +2010,11 @@ class TumblrPost:
                     process = multiprocessing.Process(target=note_scraper.main, args=args)
                     process.start()
                 except:
-                    os.close(ns_stdout_rd)
+                    ns_stdout_rd.close()
                     ns_msg_queue._reader.close()  # type: ignore[attr-defined]
                     raise
                 finally:
-                    os.close(ns_stdout_wr)
+                    ns_stdout_wr.close()
                     ns_msg_queue._writer.close()  # type: ignore[attr-defined]
 
                 try:
@@ -2027,11 +2027,17 @@ class TumblrPost:
                     finally:
                         ns_msg_queue.close()  # type: ignore[attr-defined]
 
-                    with open(ns_stdout_rd) as stdout:
-                        notes_html = stdout.read()
+                    try:
+                        notes_html = ns_stdout_rd.recv()
+                    except EOFError:
+                        notes_html = ''  # Child exited without sending notes
+                    finally:
+                        ns_stdout_rd.close()
 
                     process.join()
                 except:
+                    if not ns_stdout_rd.closed:
+                        ns_stdout_rd.close()
                     process.terminate()
                     process.join()
                     raise

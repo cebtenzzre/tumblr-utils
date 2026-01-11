@@ -219,7 +219,7 @@ class WebCrawler:
         return ''.join(notes_list)
 
 
-def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check):
+def main(stdout_conn, msg_queue_, post_url_, ident_, noverify, user_agent, cookiefile, notes_limit, use_dns_check):
     global post_url, ident, msg_queue
     msg_queue, post_url, ident = msg_queue_, post_url_, ident_
 
@@ -248,5 +248,4 @@ def main(stdout_fd, msg_queue_, post_url_, ident_, noverify, user_agent, cookief
     finally:
         msg_queue._writer.close()  # type: ignore[union-attr]
 
-    with open(stdout_fd, 'w') as stdout:
-        print(notes, end='', file=stdout)
+    stdout_conn.send(notes)
