@@ -222,7 +222,7 @@ def load_bs4(reason):
         import lxml  # noqa: F401
         from bs4 import BeautifulSoup
     except ImportError:
-        print(f'Cannot {reason} without the bs4 component. Try `pip install "tumblr-backup[bs4]"`', file=sys.stderr)
+        print(f'Cannot {reason} without the bs4 component. Try installing tumblr-backup with the [bs4] extra.', file=sys.stderr)
         sys.exit(1)
     return BeautifulSoup
 
@@ -1026,7 +1026,7 @@ class TumblrBackup:
         if renderer is None:
             logger.error(
                 f'Dashboard-only blog {account} requires a js engine for npf2html.\n'
-                'Try `pip install "tumblr-backup[dash]"`\n'
+                'Try installing tumblr-backup with the [dash] extra.\n'
             )
             sys.exit(1)
         if not isinstance(renderer, QuickJsNpfRenderer):

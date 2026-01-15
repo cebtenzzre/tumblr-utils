@@ -3,7 +3,7 @@
 ## Basic Installation
 
 1. Install the latest Python 3.
-2. Run `pip install tumblr-backup` from a command line.
+2. Run `pipx install tumblr-backup` from a command line.
 3. Create an "app" at <https://www.tumblr.com/oauth/apps>. Follow the instructions
    there; most values entered don't matter.
 4. Run `tumblr-backup --set-api-key API_KEY`, where API\_KEY is the OAuth Consumer
@@ -29,17 +29,17 @@ There are several optional extras that enable additional features:
 5. The `dashboard` extra enables backing up dashboard-only blogs by installing `quickjs` for
    fast NPF (Neue Post Format) rendering. This is required for dashboard-only blogs. It pulls in `quickjs` by default.
    `miniracer` is also supported, in case the `quickjs` package is not available - but it must be installed manually to
-   use it as a fallback (`pip install mini-racer`).
+   use it as a fallback (e.g., `pipx inject tumblr-backup mini-racer` or `pip install mini-racer`).
 6. The `all` extra includes all of the above features.
 
 To install one or more extras, put them in square brackets after the package name in the
-pip command. Multiple extras may be separated by commas. Make sure to quote the command
+install command. Multiple extras may be separated by commas. Make sure to quote the command
 properly, as square brackets have a special meaning in many environments when not quoted.
 
 For example:
 
 ```console
-pip install 'tumblr-backup[video,bs4]'
+pipx install 'tumblr-backup[video,bs4]'
 ```
 
 [issue 132]: (https://github.com/bbolli/tumblr-utils/issues/132)
@@ -48,7 +48,7 @@ pip install 'tumblr-backup[video,bs4]'
 
 `py3exiv2` is not a pure Python package, and requires OS-specific dependencies. If you
 would like to install the `exif` or `all` extras, you may need to install additional
-dependencies for the `pip install` command to succeed.
+dependencies for the install command to succeed.
 
 For example, on macOS, these steps successfully install the `exif` extra (requires [Homebrew]):
 
@@ -56,7 +56,7 @@ For example, on macOS, these steps successfully install the `exif` extra (requir
 brew install boost-python3 exiv2
 export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
-pip install 'tumblr-backup[exif]'
+pipx install 'tumblr-backup[exif]'
 ```
 
 [Homebrew]: https://brew.sh/

@@ -10,10 +10,10 @@ This is a fork of bbolli's [tumblr-utils](https://github.com/bbolli/tumblr-utils
 
 ### Installation
 
-1. Install with pip:
+1. Install with [pipx](https://pipx.pypa.io/):
 
    ```bash
-   pip install tumblr-backup
+   pipx install tumblr-backup
    ```
 
 2. Create a Tumblr app at <https://www.tumblr.com/oauth/apps> to get an API key
