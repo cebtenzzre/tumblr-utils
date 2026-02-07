@@ -8,78 +8,122 @@ This is a fork of bbolli's [tumblr-utils](https://github.com/bbolli/tumblr-utils
 
 ## Quick Start
 
-### Installation
+### Step 1: Install Python (if you don't have it)
 
-1. Install with [pipx](https://pipx.pypa.io/):
+**Windows and macOS:** Download and install Python from [python.org](https://www.python.org/downloads/). During installation on Windows, **check the box that says "Add Python to PATH"** — this is important!
 
-   ```bash
-   pipx install tumblr-backup
-   ```
+**Linux:** Python is usually already installed. You can check by opening a terminal and typing `python3 --version`.
 
-2. Create a Tumblr app at <https://www.tumblr.com/oauth/apps> to get an API key
+### Step 2: Install tumblr-backup
 
-3. Set your API key:
+Open a terminal. Then run the install command for your system:
 
-   ```bash
-   tumblr-backup --set-api-key YOUR_API_KEY
-   ```
+<details>
+<summary><b>Windows or macOS</b> (if you installed Python from python.org)</summary>
 
-### Backup a Blog
+```console
+pip install tumblr-backup
+```
 
-To backup a blog, simply run:
+> **Tip:** If `pip` isn't recognized, try `python -m pip install tumblr-backup` instead.
 
-```bash
+</details>
+
+<details>
+<summary><b>Linux or Homebrew</b></summary>
+
+On Linux (and macOS with Homebrew Python), the recommended way to install command-line tools is `pipx`, which manages them in isolated environments:
+
+**Ubuntu/Debian:**
+```console
+sudo apt install pipx
+pipx install tumblr-backup
+```
+
+**Fedora:**
+```console
+sudo dnf install pipx
+pipx install tumblr-backup
+```
+
+**macOS (Homebrew):**
+```console
+brew install pipx
+pipx install tumblr-backup
+```
+
+**Other distros / alternative method:** If your package manager doesn't have pipx, you can use [uv](https://docs.astral.sh/uv/), a fast Python tool installer:
+```console
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install tumblr-backup
+```
+
+</details>
+
+### Step 3: Get a Tumblr API key
+
+1. Go to <https://www.tumblr.com/oauth/apps> (log in if needed)
+2. Click **Register application**
+3. Fill in any values for the required fields (the specific values don't matter)
+4. Copy the **OAuth Consumer Key** shown on the next page
+
+### Step 4: Save your API key
+
+```console
+tumblr-backup --set-api-key YOUR_API_KEY
+```
+
+Replace `YOUR_API_KEY` with the key you copied.
+
+### Step 5: Back up a blog
+
+```console
 tumblr-backup blog-name
 ```
 
-For example, to backup `staff.tumblr.com`:
+For example, to back up `staff.tumblr.com`:
 
-```bash
+```console
 tumblr-backup staff
 ```
 
-This will create a `staff/` directory containing:
+This will create a `staff/` directory in your current folder containing an `index.html` file you can open in your browser to view the backup, along with monthly archive pages, individual post pages, and all images and media.
 
-- An `index.html` file with links to all posts
-- Monthly archive pages
-- Individual post pages
-- All images and media from the blog
+### Updating an existing backup
 
-### Incremental Backups
+To add only new posts to an existing backup:
 
-To update an existing backup with only new posts:
-
-```bash
+```console
 tumblr-backup -i blog-name
 ```
 
-## Advanced Features
+## Optional extras
 
-tumblr-backup supports many advanced features like:
+tumblr-backup has optional features you can enable by installing extras. Add them in square brackets after the package name:
 
-- Backing up videos and audio files
-- Saving post notes (likes/reblogs)
-- Filtering posts by tag or type
-- Dashboard-only blog support
-- And much more!
+```console
+pip install "tumblr-backup[video]"
+```
 
-See the [detailed documentation](docs/) for all options and features.
+(On Linux/Homebrew, replace `pip install` with `pipx install` or `uv tool install` as above.)
+
+| Extra   | What it does |
+|---------|-------------|
+| `video` | Save video files (uses yt-dlp) |
+| `exif`  | Add post tags to image EXIF metadata |
+| `bs4`   | Save post notes (likes/reblogs) |
+| `jq`    | Filter posts with custom rules |
+| `all`   | All of the above |
 
 ## Documentation
 
-- **[Installation Guide](docs/installation.md)** - Detailed installation instructions including optional features
-- **[Usage Guide](docs/usage.md)** - Complete list of options and command-line arguments
-- **[Operation Guide](docs/operation.md)** - How tumblr-backup works under the hood
+- **[Installation Guide](docs/installation.md)** — Detailed installation instructions including optional features
+- **[Usage Guide](docs/usage.md)** — Complete list of options and command-line arguments
+- **[Operation Guide](docs/operation.md)** — How tumblr-backup works under the hood
 
 ## Support & Community
 
-Join our Discord community to:
-
-- Get help and support
-- Ask questions
-- Request new features
-- Get notified about new releases
-- Share your feedback
+If you get stuck, have questions, or want to request features, join the Discord:
 
 **[Join the Discord server →](https://discord.gg/UtzGeYBNvQ)**
 
