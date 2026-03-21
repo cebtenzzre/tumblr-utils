@@ -195,32 +195,9 @@ def setup_urllib3_ssl():
     # Don't complain about missing SOCKS dependencies
     warnings.filterwarnings('ignore', category=DependencyWarning)
 
-    try:
-        import ssl
-    except ImportError:
-        return  # Can't do anything without this module
-
-    have_sni = getattr(ssl, 'HAS_SNI', False)
-
-    # Inject SecureTransport on macOS if the linked OpenSSL is too old to handle TLSv1.2 or doesn't support SNI
-    if sys.platform == 'darwin' and (ssl.OPENSSL_VERSION_NUMBER < 0x1000100F or not have_sni):
-        try:
-            from urllib3.contrib import securetransport
-        except (ImportError, OSError) as e:
-            print('Warning: Failed to inject SecureTransport: {!r}'.format(e), file=sys.stderr)
-        else:
-            securetransport.inject_into_urllib3()
-            have_sni = True  # SNI always works
-
-    # Inject PyOpenSSL if the linked OpenSSL has no SNI
-    if not have_sni:
-        try:
-            from urllib3.contrib import pyopenssl
-            pyopenssl.inject_into_urllib3()
-        except ImportError as e:
-            print('Warning: Failed to inject pyOpenSSL: {!r}'.format(e), file=sys.stderr)
-        else:
-            have_sni = True  # SNI always works
+    if sys.platform == 'darwin':
+        import truststore
+        truststore.inject_into_ssl()
 
 
 def make_requests_session(session_type, retry, timeout, verify, user_agent, cookiefile):
