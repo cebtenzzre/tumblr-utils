@@ -4,10 +4,6 @@ site_url: https://cebtenzzre.github.io/tumblr-utils
 repo_url: https://github.com/cebtenzzre/tumblr-utils
 repo_name: cebtenzzre/tumblr-utils
 
-plugins:
-  - search
-  - social
-
 theme:
   name: material
 
