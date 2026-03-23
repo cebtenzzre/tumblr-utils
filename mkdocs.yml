@@ -1,7 +1,12 @@
 site_name: tumblr-backup
+site_description: Back up your Tumblr blog locally as browsable HTML files, with images and media.
 site_url: https://cebtenzzre.github.io/tumblr-utils
 repo_url: https://github.com/cebtenzzre/tumblr-utils
 repo_name: cebtenzzre/tumblr-utils
+
+plugins:
+  - search
+  - social
 
 theme:
   name: material
