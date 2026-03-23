@@ -116,29 +116,10 @@ pip install "tumblr-backup[video]"
 | `dash`  | Back up dashboard-only blogs |
 | `all`   | All of the above |
 
-## Documentation
-
-- **[Installation Guide](https://cebtenzzre.github.io/tumblr-utils/installation/)** — Detailed installation instructions including optional features
-- **[Usage Guide](https://cebtenzzre.github.io/tumblr-utils/usage/)** — Complete list of options and command-line arguments
-- **[Operation Guide](https://cebtenzzre.github.io/tumblr-utils/operation/)** — How tumblr-backup works under the hood
+See the [Installation Guide](installation.md) for detailed instructions on each extra, including platform-specific notes.
 
 ## Support & Community
 
 If you get stuck, have questions, or want to request features, join the Discord:
 
 **[Join the Discord server →](https://discord.gg/UtzGeYBNvQ)**
-
-## Third-party Components
-
-This project redistributes **npf2html** (MIT) from <https://github.com/nex3/npf2html> at commit `05d602a`.
-
-- Upstream license: see `3rdparty/npf2html/LICENSE`.
-- Source used to produce the bundled JS: `3rdparty/npf2html/` with build steps in `3rdparty/README.md`.
-
-## Acknowledgments
-
-- [bdoms](https://github.com/bdoms/tumblr_backup) for the initial implementation
-- [WyohKnott](https://github.com/WyohKnott) for numerous bug reports and patches
-- [Tumblr](https://www.tumblr.com) for their discontinued backup tool whose
-  output was the inspiration for the styling applied in `tumblr_backup`.
-- [Beat Bolli](https://github.com/bbolli/tumblr-utils)

@@ -26,10 +26,7 @@ There are several optional extras that enable additional features:
    that reblogged or liked a public post.
 4. The `jq` extra enables the `--filter` option to filter the downloaded posts with arbitrary
    rules based on their metadata.
-5. The `dashboard` extra enables backing up dashboard-only blogs by installing `quickjs` for
-   fast NPF (Neue Post Format) rendering. This is required for dashboard-only blogs. It pulls in `quickjs` by default.
-   `miniracer` is also supported, in case the `quickjs` package is not available - but it must be installed manually to
-   use it as a fallback (e.g., `pipx inject tumblr-backup mini-racer` or `pip install mini-racer`).
+5. The `dash` extra enables backing up [dashboard-only blogs](#dashboard-only-blogs).
 6. The `all` extra includes all of the above features.
 
 To install one or more extras, put them in square brackets after the package name in the
@@ -43,6 +40,44 @@ pipx install 'tumblr-backup[video,bs4]'
 ```
 
 [issue 132]: (https://github.com/bbolli/tumblr-utils/issues/132)
+
+## Dashboard-only blogs
+
+Some Tumblr blogs don't have a public page — they only post to the dashboard. To back
+up these blogs, you need the `dash` extra:
+
+```console
+pip install "tumblr-backup[dash]"
+```
+
+(On Linux/Homebrew, replace `pip install` with `pipx install` or `uv tool install`.)
+
+You will also need to provide a cookie file so tumblr-backup can access the dashboard.
+See the `--cookiefile` option in the [Usage Guide](usage.md) for details.
+
+### Getting an error about "Failed building wheel for quickjs"?
+
+This is a known issue on **Python 3.13 and newer**. The `quickjs` package that
+tumblr-backup normally uses doesn't support Python 3.13+ yet, and this error is
+most common on **Windows** where the tools needed to build it from scratch aren't
+usually installed.
+
+You can use `mini-racer` instead — it works the same way and is easier to install.
+tumblr-backup will automatically pick it up.
+
+If you installed with **pip**:
+
+```console
+pip install mini-racer
+```
+
+If you installed with **pipx**:
+
+```console
+pipx inject tumblr-backup mini-racer
+```
+
+After that, try your backup command again — it should work now.
 
 ## Notes About py3exiv2
 
