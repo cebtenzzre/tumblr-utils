@@ -122,4 +122,4 @@ See the [Installation Guide](installation.md) for detailed instructions on each 
 
 If you get stuck, have questions, or want to request features, join the Discord:
 
-**[Join the Discord server →](https://discord.gg/UtzGeYBNvQ)**
+<iframe src="https://discord.com/widget?id=1444409963920228484&theme=dark" width="350" height="500" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
