@@ -1,6 +1,6 @@
 [project]
 name = "tumblr-backup"
-version = "1.6.3.dev0"
+version = "1.6.3"
 description = "An advanced tool for backing up Tumblr blogs."
 dynamic = ["readme"]
 requires-python = ">=3.10"
@@ -80,6 +80,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 include-package-data = true
+packages = ["tumblr_backup", "tumblr_backup.npf"]
 
 [tool.setuptools.package-data]
 tumblr_backup = [
