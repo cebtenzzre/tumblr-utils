@@ -6,6 +6,7 @@ repo_name: cebtenzzre/tumblr-utils
 
 theme:
   name: material
+  custom_dir: overrides
 
 markdown_extensions:
   - admonition
