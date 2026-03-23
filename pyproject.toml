@@ -66,6 +66,7 @@ dev = [
 
 [project.urls]
 "Homepage" = "https://github.com/cebtenzzre/tumblr-utils"
+"Documentation" = "https://cebtenzzre.github.io/tumblr-utils/"
 "Bug Reports" = "https://github.com/cebtenzzre/tumblr-utils/issues"
 "Source" = "https://github.com/cebtenzzre/tumblr-utils"
 
