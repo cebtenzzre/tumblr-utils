@@ -16,9 +16,8 @@
 There are several optional extras that enable additional features:
 
 1. The `video` extra enables the `--save-video` and `--save-video-tumblr` options, which
-   download videos using yt-dlp. If you need HTTP cookies to download, use an appropriate
-   browser plugin to extract the cookie(s) into a file and use option `--cookiefile=file`.
-   See [issue 132].
+   download videos using yt-dlp. If you need HTTP cookies to download, see
+   [Getting Cookies](cookies.md) and use the `--cookiefile` option.
 2. The `exif` extra enables the `--exif` option, which adds post tags to the EXIF metadata
    of JPEG files. This pulls in the `py3exiv2` module which may have additional
    prerequites depending on your platform. See the below section on installing py3exiv2.
@@ -52,8 +51,8 @@ pip install "tumblr-backup[dash]"
 
 (On Linux/Homebrew, replace `pip install` with `pipx install` or `uv tool install`.)
 
-You will also need to provide a cookie file so tumblr-backup can access the dashboard.
-See the `--cookiefile` option in the [Usage Guide](usage.md) for details.
+You will also need a cookie file so tumblr-backup can access the dashboard.
+See [Getting Cookies](cookies.md) for how to set this up.
 
 ### Getting an error about "Failed building wheel for quickjs"?
 

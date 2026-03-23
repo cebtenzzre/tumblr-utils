@@ -14,5 +14,6 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Installation: installation.md
+  - Getting Cookies: cookies.md
   - Usage: usage.md
   - How It Works: operation.md
