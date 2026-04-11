@@ -1860,16 +1860,37 @@ class TumblrPost:
         # change the image resolution to 1280
         return re.sub(r'_\d{2,4}(\.\w+)$', r'_1280\1', image_url)
 
+    @staticmethod
+    def remove_srcset_image(image_html: str):
+        """Remove the srcset attribute from the &lt;img&gt; tag,
+        as (local) src attribute is ignored if srcset contains width descriptors.
+        After removal, local images are displayed instead of external ones chosen from the srcset.
+        
+        @see https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img#srcset
+        
+        :param image_html: img html tag with attributes
+        :type image_html: str"""
+        return re.sub(
+            r"""(?i)(<img(?:\s[^>]*?)?)(\s*srcset\s*=\s*["'].*?["'])([^>]*>)""",
+            # remove group 2: the srcset attribute and preceding whitespace
+            (lambda match: match.group(1) + match.group(3)),
+            image_html
+        )
+
     def get_inline_image(self, match):
         """Saves an inline image if not saved yet. Returns the new <img> tag or
-        the original one in case of download errors."""
+        the original one in case of download errors.
+        
+        :param match: Match object of the img html tag, with the src attribute in group 2
+        :type match: re.Match"""
         image_url, image_filename = self._parse_url_match(match, transform=self.maxsize_image_url)
         if not image_filename or not image_url.startswith('http'):
-            return match.group(0)
+            return self.remove_srcset_image(match.group(0))
         saved_name = self.download_media(image_url, filename=image_filename)
         if saved_name is None:
-            return match.group(0)
-        return match.group(1) + self.media_url + '/' + saved_name + match.group(3)
+            return self.remove_srcset_image(match.group(0))
+        new_html = match.group(1) + self.media_url + '/' + saved_name + match.group(3)
+        return self.remove_srcset_image(new_html)
 
     def get_inline_video_poster(self, match):
         """Saves an inline video poster if not saved yet. Returns the new
