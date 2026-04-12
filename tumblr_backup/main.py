@@ -1860,37 +1860,49 @@ class TumblrPost:
         # change the image resolution to 1280
         return re.sub(r'_\d{2,4}(\.\w+)$', r'_1280\1', image_url)
 
+    
     @staticmethod
-    def remove_srcset_image(image_html: str):
-        """Remove the srcset attribute from the &lt;img&gt; tag,
-        as (local) src attribute is ignored if srcset contains width descriptors.
-        After removal, local images are displayed instead of external ones chosen from the srcset.
+    def remove_attrs_htmltag(html_tag: str, attrs: list[str]) -> str:
+        """Remove the attributes from an html tag. HTML tag body (if present) is not modified.
         
-        @see https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img#srcset
-        
-        :param image_html: img html tag with attributes
-        :type image_html: str"""
-        return re.sub(
-            r"""(?i)(<img(?:\s[^>]*?)?)(\s*srcset\s*=\s*["'].*?["'])([^>]*>)""",
-            # remove group 2: the srcset attribute and preceding whitespace
-            (lambda match: match.group(1) + match.group(3)),
-            image_html
-        )
+        :param html: html tag with attributes. Assumed to have no preceding content before tag opening.
+        :type html: str
+        :return: html tag with the specified attributes removed.
+        :rtype: str"""
+        for attr in attrs:
+            html_tag = re.sub(
+                (r"""(<[a-z-0-9\-]*(?:\s[^>]*?)?)""" #open tag + any preceding attributes
+                r"""(\s*{}(?:\s*=\s*["'].*?["'])?)""" # whitespace + attribute (optional =value) to be removed
+                r"""([^>]*>.*)""").format(attr), # any postceding attributes + close tag + remainder
 
-    def get_inline_image(self, match):
-        """Saves an inline image if not saved yet. Returns the new <img> tag or
+                
+                # remove provided attribute (group 2) and preceding whitespace from string
+                (lambda match: match.group(1) + match.group(3)),
+                html_tag,
+                re.IGNORECASE
+            )
+        return html_tag
+
+    def get_inline_image(self, match) -> str:
+        """Saves an inline image if not saved yet. Returns the new &lt;img&gt; tag or
         the original one in case of download errors.
         
         :param match: Match object of the img html tag, with the src attribute in group 2
-        :type match: re.Match"""
+        :type match: re.Match
+        :return: new &lt;img&gt; tag
+        :rtype: str"""
         image_url, image_filename = self._parse_url_match(match, transform=self.maxsize_image_url)
         if not image_filename or not image_url.startswith('http'):
-            return self.remove_srcset_image(match.group(0))
+            return match.group(0)
         saved_name = self.download_media(image_url, filename=image_filename)
         if saved_name is None:
-            return self.remove_srcset_image(match.group(0))
+            return match.group(0)
         new_html = match.group(1) + self.media_url + '/' + saved_name + match.group(3)
-        return self.remove_srcset_image(new_html)
+        # Remove srcset as (local) src attribute is ignored if srcset contains width descriptors.
+        # After removal, local images are displayed instead of external ones chosen from srcset.
+        # see: https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img#srcset
+        # sizes attribute requires srcset so that is removed too.
+        return self.remove_attrs_htmltag(new_html, ['srcset','sizes'])
 
     def get_inline_video_poster(self, match):
         """Saves an inline video poster if not saved yet. Returns the new
