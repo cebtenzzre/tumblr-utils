@@ -2009,7 +2009,7 @@ class TumblrPost:
         if self.tags:
             foot.append(''.join(self.tag_link(t) for t in self.tags))
         if self.source_title and self.source_url:
-            foot.append(f'<a title=Source href={self.source_url}>{self.source_title}</a>')
+            foot.append(f'<a title="Source" href="{self.source_url}">{self.source_title}</a>')
 
         notes_html = ''
 
