@@ -1,0 +1,44 @@
+/* FROM INSIDE TEMPLATE */
+@import url("override.css");
+
+body { width: 720px; margin: 0 auto; }
+body > footer { padding: 1em 0; }
+header > img { float: right; }
+img { max-width: 720px; }
+blockquote { margin-left: 0; margin-right: 0; border-left: 8px #999 solid; padding: 0 0 0 24px; }
+.archive h1, .subtitle, article { padding-bottom: 0.75em; border-bottom: 1px #ccc dotted; }
+article[class^="liked-"] { background-color: #f0f0f8; }
+.post a.llink { display: none; }
+header a, footer a { text-decoration: none; }
+footer, article footer a { font-size: small; color: #999; }
+/* NPF tumblr styles
+from: https://assets.tumblr.com/client/prod/standalone/blog-network-npf/index.build.css */
+/* Font replacement for Tumblr's Lucille (aka Fairwater Script Regular).
+See font_LICENSE.txt or the font metadata for the used font */
+@font-face {
+    font-family: 'Lucille';
+    src: url('fonts/lucille_esque.eot');
+    src: url('fonts/lucille_esque.eot?#iefix') format('embedded-opentype'),
+        url('fonts/lucille_esque.woff2') format('woff2'),
+        url('fonts/lucille_esque.woff') format('woff'),
+        url('fonts/lucille_esque.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+}
+p.npf_color_joey,span.npf_color_joey { color: #ff492f }
+p.npf_color_monica,span.npf_color_monica { color: #ff8a00 }
+p.npf_color_phoebe,span.npf_color_phoebe { color: #e8d73a }
+p.npf_color_ross,span.npf_color_ross { color: #00cf35 }
+p.npf_color_rachel,span.npf_color_rachel { color: #00b8ff }
+p.npf_color_chandler,span.npf_color_chandler { color: #7c5cff }
+p.npf_color_niles,span.npf_color_niles { color: #ff62ce }
+p.npf_color_frasier,span.npf_color_frasier { color: #001935 }
+p.npf_color_mr_big,span.npf_color_mr_big { color: #000c1a }
+article { font-family: Helvetica,Arial,sans-serif; }
+p.npf_quirky,span.npf_quirky {
+    font-family: 'Lucille',Georgia,Times,Times New Roman,Serif; font-size: 24px; line-height: 30px;
+}
+p.npf_chat,span.npf_chat { font-family: Courier,monospace; }
+p.npf_quote,span.npf_quote {
+    font-family: Georgia,Times,Times New Roman,Serif; font-size: 34px; font-style: normal; line-height: 1.5;
+}
