@@ -1825,7 +1825,9 @@ class TumblrPost:
             return ''
 
         # Prevent racing of existence check and download
-        with acquire_media_download(media_filename, check_exists=partial(os.path.isfile, media_filename)) as should_download:
+        with acquire_media_download(
+            media_filename, check_exists=partial(os.path.isfile, media_filename)
+        ) as should_download:
             if should_download:
                 # Proceed with download
                 try:
@@ -1860,22 +1862,21 @@ class TumblrPost:
         # change the image resolution to 1280
         return re.sub(r'_\d{2,4}(\.\w+)$', r'_1280\1', image_url)
 
-    
+
     @staticmethod
     def remove_attrs_htmltag(html_tag: str, attrs: list[str]) -> str:
         """Remove the attributes from an html tag. HTML tag body (if present) is not modified.
-        
+
         :param html: html tag with attributes. Assumed to have no preceding content before tag opening.
         :type html: str
         :return: html tag with the specified attributes removed.
         :rtype: str"""
         for attr in attrs:
             html_tag = re.sub(
-                (r"""(<[a-z-0-9\-]*(?:\s[^>]*?)?)""" #open tag + any preceding attributes
-                r"""(\s*{}(?:\s*=\s*["'].*?["'])?)""" # whitespace + attribute (optional =value) to be removed
-                r"""([^>]*>.*)""").format(attr), # any postceding attributes + close tag + remainder
+                (r"""(<[a-z-0-9\-]*(?:\s[^>]*?)?)"""  # open tag + any preceding attributes
+                    r"""(\s*{}(?:\s*=\s*["'].*?["'])?)"""  # whitespace + attribute (optional =value) to be removed
+                    r"""([^>]*>.*)""").format(attr),  # any postceding attributes + close tag + remainder
 
-                
                 # remove provided attribute (group 2) and preceding whitespace from string
                 (lambda match: match.group(1) + match.group(3)),
                 html_tag,
@@ -1886,7 +1887,7 @@ class TumblrPost:
     def get_inline_image(self, match) -> str:
         """Saves an inline image if not saved yet. Returns the new &lt;img&gt; tag or
         the original one in case of download errors.
-        
+
         :param match: Match object of the img html tag, with the src attribute in group 2
         :type match: re.Match
         :return: new &lt;img&gt; tag
@@ -1902,7 +1903,7 @@ class TumblrPost:
         # After removal, local images are displayed instead of external ones chosen from srcset.
         # see: https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img#srcset
         # sizes attribute requires srcset so that is removed too.
-        return self.remove_attrs_htmltag(new_html, ['srcset','sizes'])
+        return self.remove_attrs_htmltag(new_html, ['srcset', 'sizes'])
 
     def get_inline_video_poster(self, match):
         """Saves an inline video poster if not saved yet. Returns the new
@@ -2361,7 +2362,7 @@ class RequestCallback(argparse.Action):
         request = self._get_option(namespace)
         queries = values.split(',')
         for req in queries:
-            typ, *tags =  req.strip().split(':')
+            typ, *tags = req.strip().split(':')
             self._set_request(parser, request, typ, tags, option_string)
 
     def _get_option(self, namespace: Namespace) -> dict[str, list[str]]:
