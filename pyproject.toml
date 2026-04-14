@@ -86,6 +86,8 @@ packages = ["tumblr_backup", "tumblr_backup.npf"]
 tumblr_backup = [
     "assets/npf2html.iife.js",
     "assets/npf2html.iife.js.map",
+    "assets/*",
+    "templates/*",
 ]
 
 [tool.mypy]
