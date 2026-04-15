@@ -23,7 +23,7 @@ See font_LICENSE.txt or the font metadata for the used font */
         url('fonts/lucille_esque.woff') format('woff'),
         url('fonts/lucille_esque.ttf') format('truetype');
     font-weight: 400;
-    font-style: normal;
+    font-style: italic;
 }
 p.npf_color_joey,span.npf_color_joey { color: #ff492f }
 p.npf_color_monica,span.npf_color_monica { color: #ff8a00 }
@@ -36,9 +36,15 @@ p.npf_color_frasier,span.npf_color_frasier { color: #001935 }
 p.npf_color_mr_big,span.npf_color_mr_big { color: #000c1a }
 article { font-family: Helvetica,Arial,sans-serif; }
 p.npf_quirky,span.npf_quirky {
-    font-family: 'Lucille',Georgia,Times,Times New Roman,Serif; font-size: 24px; line-height: 30px;
+    font-family: 'Lucille',Georgia,Times,Times New Roman,Serif;
+    font-size: 24px;
+    font-style: italic;
+    line-height: 30px;
 }
 p.npf_chat,span.npf_chat { font-family: Courier,monospace; }
 p.npf_quote,span.npf_quote {
-    font-family: Georgia,Times,Times New Roman,Serif; font-size: 34px; font-style: normal; line-height: 1.5;
+    font-family: Georgia,Times,Times New Roman,Serif;
+    font-size: 34px;
+    font-style: normal;
+    line-height: 1.5;
 }
