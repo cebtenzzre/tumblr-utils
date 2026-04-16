@@ -9,6 +9,7 @@ import hashlib
 import http.client
 import importlib.metadata
 import importlib.resources
+import importlib.resources.abc
 import itertools
 import json
 import locale
@@ -39,13 +40,13 @@ from typing import (
     TYPE_CHECKING,
     Any,
     BinaryIO,
+    TextIO,
     Callable,
     ClassVar,
     ContextManager,
     Iterator,
     Literal,
     NamedTuple,
-    TextIO,
     TypedDict,
     cast,
 )
@@ -92,10 +93,12 @@ from .logging import LogLevel, logger
 if TYPE_CHECKING:
     from bs4 import Tag
     from typing_extensions import TypeAlias
+    from _typeshed import OpenTextMode, OpenBinaryMode
 else:
     Tag = None
 
 JSONDict: TypeAlias = 'dict[str, Any]'
+_StrPath: TypeAlias = 'str | os.PathLike[str]'
 
 # extra optional packages
 try:
@@ -248,7 +251,7 @@ def load_bs4(reason):
 
 
 
-def mkdir(dir_, recursive=False):
+def mkdir(dir_: _StrPath, recursive: bool = False):
     if not os.path.exists(dir_):
         try:
             if recursive:
@@ -259,16 +262,18 @@ def mkdir(dir_, recursive=False):
             pass  # ignored
 
 
-def path_to(*parts):
+def path_to(*parts: _StrPath) -> str:
     return join(save_folder, *parts)
 
 
-def open_file(open_fn, parts):
+def open_file[T](open_fn: Callable[[str], T], parts: tuple[_StrPath, ...]) -> T:
     mkdir(path_to(*parts[:-1]), recursive=True)
     return open_fn(path_to(*parts))
 
 
 class open_outfile:
+    # explicitly not typed to avoid duplication largely of this class.
+    # open_text() and open_bin() provide correct types.
     def __init__(self, mode, *parts, **kwargs):
         self._dest_path = open_file(lambda f: f, parts)
         dest_dirname, dest_basename = split(self._dest_path)
@@ -306,20 +311,20 @@ class open_outfile:
 
 
 @contextlib.contextmanager
-def open_text(*parts, mode='w') -> Iterator[TextIO]:
+def open_text(*parts: _StrPath, mode: OpenTextMode = 'w') -> Iterator[TextIO]:
     assert 'b' not in mode
     with open_outfile(mode, *parts, encoding=FILE_ENCODING, errors='xmlcharrefreplace') as f:
         yield f
 
 
 @contextlib.contextmanager
-def open_bin(*parts, mode='wb') -> Iterator[TextIO]:
+def open_bin(*parts: _StrPath, mode: OpenBinaryMode = 'wb') -> Iterator[BinaryIO]:
     assert 'b' in mode
     with open_outfile(mode, *parts) as f:
         yield f
 
 
-def strftime(fmt, t=None):
+def strftime(fmt: str, t: time.struct_time | None = None):
     if t is None:
         t = time.localtime()
     return time.strftime(fmt, t)
@@ -345,7 +350,7 @@ def get_api_url(account: str, *, likes: bool, dash: bool | None) -> str:
     )
 
 
-def parse_period_date(period):
+def parse_period_date(period: str):
     """Prepare the period start and end timestamps"""
     timefn: Callable[[Any], float] = time.mktime
     # UTC marker
@@ -394,7 +399,7 @@ class ApiParser:
 
     @classmethod
     def setup(
-        cls, api_key: str, no_ssl_verify: bool, user_agent: str, cookiefile: str | os.PathLike[str],
+        cls, api_key: str, no_ssl_verify: bool, user_agent: str, cookiefile: _StrPath,
     ) -> None:
         cls.api_key = api_key
         cls.session = make_requests_session(
@@ -407,7 +412,7 @@ class ApiParser:
         assert self.session is not None
         if self._community_label_checked:
             return
-        self._community_label_checked = True
+        ApiParser._community_label_checked = True
         url = 'https://www.tumblr.com/api/v2/user/info'
         with self.session.get(url, headers={'Authorization': f'Bearer {self.api_key}'}) as resp:
             if resp.status_code != 200:
@@ -680,7 +685,11 @@ def add_exif(image_name: str, tags: set[str], exif: set[str]) -> None:
         logger.error('Writing metadata failed for tags {} in {!r}: {!r}\n'.format(tags, image_name, e))
 
 
-def copy_package_file(src: str | importlib.resources.Traversable, *destparts: str, filemode: Literal['t', 'b'] = 't'):
+def copy_package_file(
+        src: str | importlib.resources.abc.Traversable,
+        *destparts: _StrPath,
+        filemode: Literal['t', 'b'] = 't'
+):
     """Copy internal package file to output directory
 
     :param src: source; relative file path, or Traversable (:class:`importlib.resources.Traversable`)
@@ -762,11 +771,11 @@ def find_post_files(dirs: bool) -> Iterator[str]:
     yield from filter(os.path.exists, indexes)
 
 
-def match_avatar(name):
+def match_avatar(name: str) -> bool:
     return name.startswith(avatar_base + '.')
 
 
-def get_avatar(account: str, prev_archive: str | os.PathLike[str], no_get: bool) -> None:
+def get_avatar(account: str, prev_archive: _StrPath, no_get: bool) -> None:
     if prev_archive is not None:
         # Copy old avatar, if present
         avatar_matches = find_files(join(prev_archive, theme_dir), match_avatar)
@@ -802,7 +811,7 @@ def get_avatar(account: str, prev_archive: str | os.PathLike[str], no_get: bool)
         e.log()
 
 
-def get_style(account: str, prev_archive: str | os.PathLike[str], no_get: bool, use_dns_check: bool) -> None:
+def get_style(account: str, prev_archive: _StrPath, no_get: bool, use_dns_check: bool) -> None:
     """Get the blog's CSS by brute-forcing it from the home page.
     The v2 API has no method for getting the style directly.
     See https://groups.google.com/d/msg/tumblr-api/f-rRH6gOb6w/sAXZIeYx5AUJ"""
@@ -854,7 +863,7 @@ def maybe_copy_media(prev_archive, path_parts, pa_path_parts=None):
     else:
         return True  # Don't overwrite
 
-    with open_outfile('wb', *path_parts) as dstf:
+    with open_bin(*path_parts, mode='wb') as dstf:
         copyfile(srcpath, dstf.name)
         shutil.copystat(srcpath, dstf.name)
 
@@ -917,8 +926,8 @@ class Index:
     def save_index(self, index_dir='.', title=None):
         archives = sorted(((y, m) for y in self.index for m in self.index[y]),
                           reverse=self.reverse_month)
-        subtitle = self.blog.title if title else self.blog.subtitle
-        title = title or self.blog.title
+        subtitle = (self.blog.title if title else self.blog.subtitle) or ''
+        title = title or self.blog.title or ''
         with open_text(index_dir, dir_index) as idx:
             idx.write(self.blog.header(title, self.body_class, subtitle, avatar=True))
             if self.tag_index and self.body_class == 'index':
@@ -1046,7 +1055,7 @@ class Indices:
         global save_dir
         save_dir = '../../..'
         mkdir(path_to(tag_index_dir))
-        tag_index = [self.blog.header('Tag index', 'tag-index', self.blog.title, avatar=True), '<ul>']
+        tag_index = [self.blog.header('Tag index', 'tag-index', self.blog.title or '', avatar=True), '<ul>']
         for tag, index in sorted(self.tags.items(), key=lambda kv: kv[1].name):
             digest = hashlib.md5(to_bytes(tag)).hexdigest()
             index.save_index(tag_index_dir + os.sep + digest, f'Tag ‛{index.name}’')
@@ -1244,7 +1253,7 @@ class TumblrBackup:
                 )
 
         write_fro = False
-        if backdiff_nondef is not None:
+        if backdiff_nondef is not None and first_run_options is not None:
             # Load saved options, unless they were overridden with --ignore-diffopt
             for opt in BACKUP_CHANGING_OPTIONS:
                 if opt not in backdiff_nondef:
@@ -1303,31 +1312,31 @@ class TumblrBackup:
             # Normalize idents
             self.options.idents.sort(reverse=True)
 
+        ident_max = None
         if self.options.incremental or self.options.resume:
             post_glob = list(find_post_files(self.options.dirs))
 
-        ident_max = None
-        if self.options.incremental and post_glob:
-            if self.options.likes:
-                # Read every post to find the newest timestamp already saved
-                logger.warn('Finding newest liked post (may take a while)\n', account=True)
-                BeautifulSoup = load_bs4('backup likes incrementally')
-                ident_max = max(self.get_post_timestamp(post, BeautifulSoup) for post in post_glob)
-                logger.info('Backing up posts after timestamp={} ({})\n'.format(ident_max, time.ctime(ident_max)),
-                            account=True)
-            else:
-                # Get the highest post id already saved
-                if self.options.dirs:
-                    ident_max = max(int(split(split(f)[0])[1]) for f in post_glob)
+            if self.options.incremental and post_glob:
+                if self.options.likes:
+                    # Read every post to find the newest timestamp already saved
+                    logger.warn('Finding newest liked post (may take a while)\n', account=True)
+                    BeautifulSoup = load_bs4('backup likes incrementally')
+                    ident_max = max(self.get_post_timestamp(post, BeautifulSoup) for post in post_glob)
+                    logger.info('Backing up posts after timestamp={} ({})\n'.format(ident_max, time.ctime(ident_max)),
+                                account=True)
                 else:
-                    ident_max = max(int(splitext(split(f)[1])[0]) for f in post_glob)
+                    # Get the highest post id already saved
+                    if self.options.dirs:
+                        ident_max = max(int(split(split(f)[0])[1]) for f in post_glob)
+                    else:
+                        ident_max = max(int(splitext(split(f)[1])[0]) for f in post_glob)
 
-                logger.info('Backing up posts after id={}\n'.format(ident_max), account=True)
+                    logger.info('Backing up posts after id={}\n'.format(ident_max), account=True)
 
-        if self.options.resume:
-            # Update skip and count based on where we left off
-            self.options.skip = 0
-            self.post_count = len(post_glob)
+            if self.options.resume:
+                # Update skip and count based on where we left off
+                self.options.skip = 0
+                self.post_count = len(post_glob)
 
         logger.status('Getting basic information\r')
 
@@ -1821,7 +1830,7 @@ class TumblrPost:
                     if not rendered_content:
                         break
                     href = ''
-                    if (url := last_post.blog['url']) is not None and (pid := last_post.post_id) is not None:
+                    if (url := last_post.blog.get('url', None)) is not None and (pid := last_post.post_id) is not None:
                         href = f' href={quoteattr(with_post(url, pid))}'
                     body = (
                         f'<p><a{href} class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p>' +
