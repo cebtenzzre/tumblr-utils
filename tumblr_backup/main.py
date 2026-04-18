@@ -1370,10 +1370,25 @@ class TumblrBackup:
 
         if self.options.json_info:
             posts = resp[posts_key]
-            info = {'uuid': blog.get('uuid'),
+            if posts_key == 'posts':
+                info = {
+                    'blog': account,
+                    'uuid': blog.get('uuid'),
+                    'url': blog.get('url'),
+                    'title': blog.get('title'),
+                    'description': blog.get('description'),
                     'post_count': count_estimate,
-                    'last_post_ts': posts[0]['timestamp'] if posts else None}
+                    'last_posted_ts': blog.get('updated') or (posts[0]['timestamp'] if posts else None)
+                }
+            else:
+                info = {
+                    'blog': account,
+                    'liked_count': count_estimate,
+                    'last_liked_ts': posts[0]['liked_timestamp'] if posts else None
+                }
             json.dump(info, sys.stdout)
+            print("\n")
+            sys.stdout.flush()
             return
 
         if write_fro:
@@ -2731,6 +2746,9 @@ def main():
     if options.copy_notes is None:
         # Default to True if we may regenerate posts
         options.copy_notes = options.reuse_json and not options.no_post_clobber
+    if options.json_info and options.likes:
+        logger.info("Note: only use --json-info with -l for liked info."
+                    " More general info (and post related info) is available without -l.\n")
 
     # NB: this is done after setting implied options
     orig_options = vars(options).copy()
