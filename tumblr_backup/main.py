@@ -2495,7 +2495,9 @@ def main():
                         version=f'%(prog)s {importlib.metadata.version("tumblr-backup")}')
     postexist_group = parser.add_mutually_exclusive_group()
     reblog_group = parser.add_mutually_exclusive_group()
-    parser.add_argument('-O', '--outdir', help='set the output directory (default: blog-name)')
+    parser.add_argument('-O', '--outdir',
+                        help='set the output directory (default: <blog-name>).'
+                        ' If set, blog sub-folders are added automatically if multiple blogs are passed.')
     parser.add_argument('-D', '--dirs', action='store_true', help='save each post in its own folder')
     parser.add_argument('-q', '--quiet', action='store_true', help='suppress progress messages')
     postexist_group.add_argument('-i', '--incremental', action='store_true', help='incremental backup mode')
