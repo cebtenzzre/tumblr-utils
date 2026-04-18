@@ -15,7 +15,9 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   -O OUTDIR, --outdir OUTDIR
-                        set the output directory (default: blog-name)
+                        set the output directory (default: <blog-name>). If set,
+                        blog sub-folders are added automatically if multiple
+                        blogs are passed.
   -D, --dirs            save each post in its own folder
   -q, --quiet           suppress progress messages
   -i, --incremental     incremental backup mode
@@ -29,7 +31,8 @@ options:
                         --no-copy-notes)
   --notes-limit COUNT   limit requested notes to COUNT, per-post
   --cookiefile COOKIEFILE
-                        cookie file for youtube-dl, --save-notes, and dashboard-only blogs
+                        cookie file for youtube-dl, --save-notes, and dashboard-
+                        only blogs
   -j, --json            save the original JSON source
   -b, --blosxom         save the posts in blosxom format
   -r, --reverse-month   reverse the post order in the monthly archives
@@ -93,6 +96,8 @@ options:
                         line
   --json-info           Just print some info for each blog, don't make a
                         backup
+  --no-fonts            Do not load in custom fonts. Only use standard system
+                        fonts
 ```
 
 ## Arguments
@@ -102,9 +107,6 @@ _blog-name_: The name of the blog to backup.
 If your blog is under `.tumblr.com`, you can give just the first domain name
 part; if your blog is under your own domain, give the whole domain name. You
 can give more than one _blog-name_ to backup multiple blogs in one go.
-
-The default blog name(s) can be changed by copying `settings.py.example` to
-`settings.py` and adding the name(s) to the `DEFAULT_BLOGS` list.
 
 ## Environment variables
 

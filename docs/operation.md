@@ -37,7 +37,9 @@ The generated directory structure looks like this:
             style.css - the blog's style sheet
 ```
 
-The default `outdir` is the `blog-name`.
+The default `outdir` is the `blog-name`. If the `outdir` is set with `-O` or
+`--outdir`, and multiple blog names are passed to the command, a sub-folder is
+created within `outdir` per blog.
 
 ## Directory Structure with -D Option
 
@@ -90,8 +92,10 @@ It can be reached through the "Tag index" link in the main index.
 
 If you want to use a custom CSS file, call it `custom.css`, put it in the backup
 folder and do a complete backup. Without a custom CSS file, tumblr-backup saves
-a default style sheet in `backup.css`. The blog's style sheet itself is always
-saved in `theme/style.css`.
+a minimal default style sheet in `backup.css`. The option `--no-fonts` disables
+the use of custom fonts in this style sheet, instead relying fully on widely
+available system and web fonts. The blog's style sheet itself is always saved in
+`theme/style.css`.
 
 It you want to override just a few default styles, create the file
 `override.css` in the backup folder. This file is included automatically by the

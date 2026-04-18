@@ -2612,8 +2612,7 @@ def main():
     parser.add_argument('--notes-limit', type=int, metavar='COUNT', help='limit requested notes to COUNT, per-post')
     parser.add_argument('--cookiefile', help='cookie file for youtube-dl, --save-notes, and internal API')
     parser.add_argument('-j', '--json', action='store_true', help='save the original JSON source')
-    parser.add_argument('-b', '--blosxom', action='store_true',
-                        help='save the posts in blosxom format. See: http://www.blosxom.com/')
+    parser.add_argument('-b', '--blosxom', action='store_true', help='save the posts in blosxom format.')
     parser.add_argument('-r', '--reverse-month', action='store_false',
                         help='reverse the post order in the monthly archives')
     parser.add_argument('-R', '--reverse-index', action='store_false', help='reverse the index file order')
@@ -2669,7 +2668,7 @@ def main():
     parser.add_argument('--json-info', action='store_true',
                         help="Just print some info for each blog, don't make a backup")
     parser.add_argument('--no-fonts', action='store_true',
-                        help='Do not load in custom fonts. Only use standard system fonts.')
+                        help='Do not load in custom fonts. Only use standard system fonts')
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
