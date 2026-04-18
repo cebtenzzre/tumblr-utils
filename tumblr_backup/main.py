@@ -1304,7 +1304,7 @@ class TumblrBackup:
             save_folder = join(root_folder, self.options.outdir or '', account)
         else:
             save_folder = join(root_folder, self.options.outdir or account)
-        
+
         self.post_count = 0
         self.filter_skipped = 0
 
@@ -2695,7 +2695,7 @@ def main():
     if options.posts_per_page < 0:
         parser.error('--posts-per-page: posts per page must not be negative')
     if options.dirs and options.tag_index:
-        parser.error('-D cannot be used with --tag-index')
+        parser.error('-D/--dirs cannot be used with --tag-index')
     if options.cookiefile is not None and not os.access(options.cookiefile, os.R_OK):
         parser.error('--cookiefile: file cannot be read')
     if options.notes_limit is not None:
