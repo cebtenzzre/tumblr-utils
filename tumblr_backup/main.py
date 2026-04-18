@@ -550,7 +550,7 @@ class ApiParser:
             if status == 403 and self.options.likes:
                 logger.error('HTTP 403: Most likely {} does not have public likes.\n'.format(self.account))
                 return None
-            logger.error('URL is {}?{}\n[FATAL] {} API repsonse: HTTP {} {}\n{}'.format(
+            logger.error('URL is {}?{}\n[FATAL] {} API response: HTTP {} {}\n{}'.format(
                 base, urlencode(params),
                 'Error retrieving' if doc is None else 'Non-OK',
                 status, reason,
@@ -558,7 +558,7 @@ class ApiParser:
             ))
             if status == 401 and self.dashboard_only_blog:
                 logger.error("This is a dashboard-only blog, so you probably don't have the right cookies.{}\n".format(
-                    '' if self.options.cookiefile else ' Try --cookiefile.',
+                    ' Try refreshing them.' if self.options.cookiefile else ' Try --cookiefile.',
                 ))
             return None
         if doc is None:
@@ -1289,12 +1289,10 @@ class TumblrBackup:
         if self.options.json_info:
             pass  # Not going to save anything
         elif self.options.blosxom:
-            save_folder = root_folder
             post_ext = '.txt'
             post_dir = os.curdir
             post_class: type[TumblrPost] = BlosxomPost
         else:
-            save_folder = join(root_folder, self.options.outdir or account)
             media_folder = path_to(media_dir)
             if self.options.dirs:
                 post_ext = ''
@@ -1302,6 +1300,11 @@ class TumblrBackup:
             post_class = TumblrPost
             have_custom_css = os.access(path_to(custom_css), os.R_OK)
 
+        if len(self.options.blogs) > 1:
+            save_folder = join(root_folder, self.options.outdir or '', account)
+        else:
+            save_folder = join(root_folder, self.options.outdir or account)
+        
         self.post_count = 0
         self.filter_skipped = 0
 
@@ -2668,6 +2671,7 @@ def main():
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
+    options.blogs = list(set(options.blogs))  # remove duplicate blog names
     blogs = options.blogs
     if not blogs:
         parser.error('Missing blog-name')
@@ -2690,8 +2694,6 @@ def main():
         parser.error('--skip: skip must not be negative')
     if options.posts_per_page < 0:
         parser.error('--posts-per-page: posts per page must not be negative')
-    if options.outdir and len(blogs) > 1:
-        parser.error('-O can only be used for a single blog-name')
     if options.dirs and options.tag_index:
         parser.error('-D cannot be used with --tag-index')
     if options.cookiefile is not None and not os.access(options.cookiefile, os.R_OK):
