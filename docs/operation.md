@@ -158,7 +158,7 @@ In Blosxom format mode, the posts generated are saved in a format suitable for
 re-publishing in [Blosxom](http://www.blosxom.com) with the [Meta
 plugin](http://www.blosxom.com/plugins/meta/meta.htm). Images are not
 downloaded; instead, the image links point back to the original image on
-Tumblr. The posts are saved in the current folder with a `.txt` extension. The
+Tumblr. The posts are saved in `outdir` with a `.txt` extension. The
 index is not updated.
 
 ## Limiting Backed Up Posts

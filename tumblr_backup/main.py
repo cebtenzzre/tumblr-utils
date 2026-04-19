@@ -2696,10 +2696,10 @@ def main():
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
+    if not options.blogs:
+        parser.error('Missing blog-name')
     options.blogs = list(set(options.blogs))  # remove duplicate blog names
     blogs = options.blogs
-    if not blogs:
-        parser.error('Missing blog-name')
 
     logger.set_quiet(options.quiet)
     if options.json_info:

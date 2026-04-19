@@ -98,6 +98,10 @@ options:
                         backup
   --no-fonts            Do not load in custom fonts. Only use standard system
                         fonts
+  --force-dashonly      Force the use of internal API (normally only used for
+                        dashboard-only blogs). Posts marked explicit are
+                        possible to archive this way for blogs the cookies are
+                        valid for.
 ```
 
 ## Arguments
