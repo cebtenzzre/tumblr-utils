@@ -868,7 +868,7 @@ class Index:
         with open_text(index_dir, dir_index) as idx:
             idx.write(self.blog.header(title, self.body_class, subtitle, avatar=True))
             if self.tag_index and self.body_class == 'index':
-                idx.write('<p><a href={}>Tag index</a></p>\n'.format(
+                idx.write('<p><a href="{}">Tag index</a></p>\n'.format(
                     urlpathjoin(tag_index_dir, dir_index),
                 ))
             for year in sorted(self.index.keys(), reverse=self.reverse_index):
@@ -883,7 +883,7 @@ class Index:
         for month in sorted(self.index[year].keys(), reverse=self.reverse_index):
             tm = time.localtime(time.mktime((year, month, 3, 0, 0, 0, 0, 0, -1)))
             month_name = self.save_month(archives, index_dir, year, month, tm)
-            idx.write('    <li><a href={} title="{} post(s)">{}</a></li>\n'.format(
+            idx.write('    <li><a href="{}" title="{} post(s)">{}</a></li>\n'.format(
                 urlpathjoin(archive_dir, month_name), len(self.index[year][month]), strftime('%B', tm),
             ))
         idx.write('</ul>\n\n')
@@ -996,7 +996,7 @@ class Indices:
         for tag, index in sorted(self.tags.items(), key=lambda kv: kv[1].name):
             digest = hashlib.md5(to_bytes(tag)).hexdigest()
             index.save_index(tag_index_dir + os.sep + digest, f'Tag ‛{index.name}’')
-            tag_index.append('    <li><a href={}>{}</a></li>'.format(
+            tag_index.append('    <li><a href="{}">{}</a></li>'.format(
                 urlpathjoin(digest, dir_index), escape(index.name),
             ))
         tag_index.extend(['</ul>', ''])
@@ -1059,7 +1059,7 @@ class TumblrBackup:
 
             <meta charset=%s>
             <title>%s</title>
-            <link rel=stylesheet href=%s>
+            <link rel=stylesheet href="%s">
 
             <body%s>
 
@@ -1070,7 +1070,7 @@ class TumblrBackup:
             avatar_matches = find_files(path_to(theme_dir), match_avatar)
             avatar_path = next(avatar_matches, None)
             if avatar_path is not None:
-                h += '<img src={} alt=Avatar>\n'.format(urlpathjoin(root_rel, theme_dir, split(avatar_path)[1]))
+                h += '<img src="{}" alt=Avatar>\n'.format(urlpathjoin(root_rel, theme_dir, split(avatar_path)[1]))
         if title:
             h += '<h1>%s</h1>\n' % title
         if subtitle:
@@ -1081,11 +1081,11 @@ class TumblrBackup:
     @staticmethod
     def footer(base, previous_page, next_page):
         f = '<footer><nav>'
-        f += '<a href={} rel=index>Index</a>\n'.format(urlpathjoin(save_dir, dir_index))
+        f += '<a href="{}" rel=index>Index</a>\n'.format(urlpathjoin(save_dir, dir_index))
         if previous_page:
-            f += '| <a href={} rel=prev>Previous</a>\n'.format(urlpathjoin(base, previous_page))
+            f += '| <a href="{}" rel=prev>Previous</a>\n'.format(urlpathjoin(base, previous_page))
         if next_page:
-            f += '| <a href={} rel=next>Next</a>\n'.format(urlpathjoin(base, next_page))
+            f += '| <a href="{}" rel=next>Next</a>\n'.format(urlpathjoin(base, next_page))
         f += '</nav></footer>\n'
         return f
 
@@ -1767,8 +1767,8 @@ class TumblrPost:
                     if not rendered_content:
                         break
                     href = ''
-                    if (url := last_post.blog['url']) is not None and (pid := last_post.post_id) is not None:
-                        href = f' href={quoteattr(with_post(url, pid))}'
+                    if (url := last_post.blog.get('url')) is not None and (pid := last_post.post_id) is not None:
+                        href = f' href="{quoteattr(with_post(url, pid))}"'
                     body = (
                         f'<p><a{href} class="tumblr_blog">{escape(last_post.blog["name"])}</a>:</p>' +
                         f'<blockquote>{body}</blockquote>'
@@ -1961,12 +1961,12 @@ class TumblrPost:
         if self.options.likes:
             post += '<p><a href=\"https://{0}.tumblr.com/\" class=\"tumblr_blog\">{0}</a>:</p>\n'.format(self.creator)
         post += '<p><time datetime=%s>%s</time>\n' % (self.isodate, strftime('%x %X', self.tm))
-        post += '<a class=llink href={}>¶</a>\n'.format(urlpathjoin(save_dir, post_dir, self.llink))
-        post += '<a href=%s>●</a>\n' % self.shorturl
+        post += '<a class=llink href="{}">¶</a>\n'.format(urlpathjoin(save_dir, post_dir, self.llink))
+        post += '<a href="%s">●</a>\n' % self.shorturl
         if self.reblogged_from and self.reblogged_from != self.reblogged_root:
-            post += '<a href=%s>⬀</a>\n' % self.reblogged_from
+            post += '<a href="%s">⬀</a>\n' % self.reblogged_from
         if self.reblogged_root:
-            post += '<a href=%s>⬈</a>\n' % self.reblogged_root
+            post += '<a href="%s">⬈</a>\n' % self.reblogged_root
         post += '</header>\n'
         content = self.get_content()
         if self.title:
@@ -1976,7 +1976,7 @@ class TumblrPost:
         if self.tags:
             foot.append(''.join(self.tag_link(t) for t in self.tags))
         if self.source_title and self.source_url:
-            foot.append(f'<a title="Source" href="{self.source_url}">{self.source_title}</a>')
+            foot.append(f'<a title=Source href="{self.source_url}">{self.source_title}</a>')
 
         notes_html = ''
 
@@ -2082,7 +2082,7 @@ class TumblrPost:
         if not TAGLINK_FMT:
             return tag_disp + ' '
         url = TAGLINK_FMT.format(domain=get_dotted_blogname(self.backup_account), tag=quote(to_bytes(tag)))
-        return '<a href=%s>%s</a>\n' % (url, tag_disp)
+        return '<a href="%s">%s</a>\n' % (url, tag_disp)
 
     def get_path(self):
         return (post_dir, self.ident, dir_index) if self.options.dirs else (post_dir, self.file_name)
