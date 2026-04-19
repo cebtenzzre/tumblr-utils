@@ -538,7 +538,13 @@ class ApiParser:
             ))
             return None
 
-        if not 200 <= status < 300:
+        if self.dashboard_only_blog is None and self.options.force_dashonly:
+            # Force the use of the internal API to parse a blog
+            self.dashboard_only_blog = True
+            logger.info("Forcing tumblr-backup into dashboard-only blog mode; trying internal API\n", account=True)
+            self._tb.get_npf_renderer(self.account)  # fail/warn fast if unavailable
+            return self.apiparse(count, start)  # Recurse once
+        elif not 200 <= status < 300:
             # Detect dashboard-only blogs by the error codes
             if status == 404 and self.dashboard_only_blog is None and not (doc is None or self.options.likes):
                 errors = doc.get('errors', ())
@@ -2684,6 +2690,9 @@ def main():
                         help="Just print some info for each blog, don't make a backup")
     parser.add_argument('--no-fonts', action='store_true',
                         help='Do not load in custom fonts. Only use standard system fonts')
+    parser.add_argument('--force-dashonly', action='store_true',
+                        help='Force the use of internal API (normally only used for dashboard-only blogs).'
+                        ' Posts marked explicit are possible to archive this way for blogs the cookies are valid for.')
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
@@ -2714,6 +2723,8 @@ def main():
         parser.error('-D/--dirs cannot be used with --tag-index')
     if options.cookiefile is not None and not os.access(options.cookiefile, os.R_OK):
         parser.error('--cookiefile: file cannot be read')
+    if options.force_dashonly is not None and options.cookiefile is None:
+        parser.error('--force-dashonly requires valid cookies. Try --cookiefile')
     if options.notes_limit is not None:
         if not options.save_notes:
             parser.error('--notes-limit requires --save-notes')
