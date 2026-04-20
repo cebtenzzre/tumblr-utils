@@ -52,14 +52,14 @@ dev = [
     "tumblr-backup[all]",
 
     # dev tools
-    "flake8==7.3.0",
-    "mypy==1.18.2",
-    "wemake-python-styleguide==1.4.0",
+    "flake8>=7.3.0",
+    "mypy>=1.18.2",
+    "wemake-python-styleguide>=1.4.0",
 
     # type stubs and other optional modules
     "mini-racer>=0.12.4",
     "pysocks>=1.7.1,<2",
-    "types-lxml==2025.08.25",
+    "types-lxml>=2025.08.25",
     "types-requests>=2.32.4.20250913,<3",
     "youtube_dl>=2021.12.17",
 ]
