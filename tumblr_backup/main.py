@@ -596,7 +596,7 @@ class ApiParser:
         if headers.get('X-Ratelimit-Perday-Remaining') == '0':
             reset = headers.get('X-Ratelimit-Perday-Reset')
             try:
-                freset = float(reset)  # pytype: disable=wrong-arg-types
+                freset = float(reset)
             except (TypeError, ValueError):
                 logger.error(f'Expected numerical X-Ratelimit-Perday-Reset, got {reset!r}\n')
                 msg = 'sometime tomorrow'

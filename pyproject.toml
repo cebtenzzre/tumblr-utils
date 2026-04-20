@@ -100,22 +100,6 @@ allow_untyped_defs = true
 allow_incomplete_defs = true
 disable_error_code = ['import-untyped']
 
-[tool.pytype]
-inputs = ['tumblr_backup']
-jobs = 'auto'
-bind_decorated_methods = true
-none_is_not_bool = true
-overriding_renamed_parameter_count_checks = true
-strict_none_binding = true
-precise_return = true
-# protocols:
-# - https://github.com/google/pytype/issues/1423
-# - https://github.com/google/pytype/issues/1424
-# strict_import: https://github.com/google/pytype/issues/1444
-# strict_parameter_checks: https://github.com/google/pytype/issues/365
-strict_primitive_comparisons = true
-# strict_undefined_checks: too many false positives
-
 [tool.isort]
 src_paths = ['tumblr_backup']
 line_length = 120

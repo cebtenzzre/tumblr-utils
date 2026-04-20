@@ -272,7 +272,7 @@ class NotifierWaiters(Deque[Any]):
 
     def __getitem__(self, index):
         item = super().__getitem__(index)
-        return deque(v[0] for v in item) if isinstance(index, slice) else item[0]  # pytype: disable=not-callable
+        return deque(v[0] for v in item) if isinstance(index, slice) else item[0]
 
     def remove(self, value):
         try:
@@ -347,7 +347,7 @@ def lock_is_owned(lock):
 
 def lock_release_save(lock):
     try:
-        return lock._release_save()  # pytype: disable=attribute-error
+        return lock._release_save()
     except AttributeError:
         lock.release()  # No state to save
         return None
@@ -355,7 +355,7 @@ def lock_release_save(lock):
 
 def lock_acquire_restore(lock, state):
     try:
-        lock._acquire_restore(state)  # pytype: disable=attribute-error
+        lock._acquire_restore(state)
     except AttributeError:
         lock.acquire()  # Ignore saved state
 
