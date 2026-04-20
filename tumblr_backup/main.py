@@ -386,7 +386,7 @@ class ApiParser:
         assert self.session is not None
         if self._community_label_checked:
             return
-        self._community_label_checked = True
+        type(self)._community_label_checked = True
         url = 'https://www.tumblr.com/api/v2/user/info'
         with self.session.get(url, headers={'Authorization': f'Bearer {self.api_key}'}) as resp:
             if resp.status_code != 200:

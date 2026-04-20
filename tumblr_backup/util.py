@@ -25,7 +25,7 @@ if sys.platform == 'darwin':
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
-    swt_base = requests.Session
+    swt_base: TypeAlias = requests.Session
 
     class Condition(threading.Condition):
         _waiters: NotifierWaiters
