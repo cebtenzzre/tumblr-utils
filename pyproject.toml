@@ -54,6 +54,8 @@ dev = [
     # dev tools
     "flake8>=7.3.0",
     "mypy>=1.18.2",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
     "wemake-python-styleguide>=1.4.0",
 
     # type stubs and other optional modules
@@ -87,6 +89,10 @@ tumblr_backup = [
     "assets/npf2html.iife.js",
     "assets/npf2html.iife.js.map",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
 
 [tool.mypy]
 files = 'tumblr_backup'
