@@ -106,3 +106,5 @@ def main():
         except ValueError as e:  # only catch ValueError as those are expected. Don't print traceback.
             print(e)
             return 1
+
+    print("[login] Login session cookies successfully saved to file.")
