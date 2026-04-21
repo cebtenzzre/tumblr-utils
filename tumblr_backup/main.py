@@ -72,6 +72,7 @@ from .npf.models import (
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .util import (
     AsyncCallable,
+    BS_PARSER,
     LockedQueue,
     copyfile,
     enospc,
@@ -89,11 +90,10 @@ from .util import (
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
 from .logging import LogLevel, logger
 
+from bs4 import BeautifulSoup, Tag
+
 if TYPE_CHECKING:
-    from bs4 import Tag
     from typing_extensions import TypeAlias
-else:
-    Tag = None
 
 JSONDict: TypeAlias = 'dict[str, Any]'
 
@@ -214,23 +214,6 @@ def acquire_media_download(media_path: str, *, check_exists: Callable[[], bool] 
         with downloading_media_cond:
             downloading_media.remove(media_path)
             downloading_media_cond.notify_all()
-
-
-def load_bs4(reason):
-    sys.modules['soupsieve'] = ()  # type: ignore[assignment]
-    try:
-        import lxml  # noqa: F401
-        from bs4 import BeautifulSoup
-    except ImportError:
-        print(
-            f'Cannot {reason} without the bs4 component.\n'
-            'See the installation guide for setup instructions:\n'
-            'https://cebtenzzre.github.io/tumblr-utils/installation/#optional-extras',
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return BeautifulSoup
-
 
 
 
@@ -815,8 +798,6 @@ def check_optional_modules(options: Namespace) -> None:
             raise RuntimeError("--exif: module 'pyexiv2' is missing features, perhaps you need 'py3exiv2'?")
     if options.filter is not None and jq is None:
         raise RuntimeError("--filter: module 'jq' is not installed")
-    if options.save_notes or options.copy_notes:
-        load_bs4('save notes' if options.save_notes else 'copy notes')
     if options.save_video and not (have_module('yt_dlp') or have_module('youtube_dl')):
         raise RuntimeError("--save-video: module 'youtube_dl' is not installed")
 
@@ -1090,14 +1071,9 @@ class TumblrBackup:
         return f
 
     @staticmethod
-    def get_post_timestamp(post, bs4_class):
-        if TYPE_CHECKING:
-            from bs4 import BeautifulSoup  # noqa: WPS474
-        else:
-            BeautifulSoup = bs4_class
-
+    def get_post_timestamp(post):
         with open(post, encoding=FILE_ENCODING) as pf:
-            soup = BeautifulSoup(pf, 'lxml')
+            soup = BeautifulSoup(pf, BS_PARSER)
         postdate = cast(Tag, soup.find('time'))['datetime']
         # datetime.fromisoformat does not understand 'Z' suffix
         return int(datetime.strptime(cast(str, postdate), '%Y-%m-%dT%H:%M:%SZ').timestamp())
@@ -1177,13 +1153,12 @@ class TumblrBackup:
                 raise RuntimeError('{}: Cannot continue empty backup'.format(account))
             else:
                 logger.warn('Found incomplete backup.\n', account=True)
-                BeautifulSoup = load_bs4('continue incomplete backup')
                 if self.options.likes:
                     logger.warn('Finding oldest liked post (may take a while)\n', account=True)
-                    oldest_tstamp = min(self.get_post_timestamp(post, BeautifulSoup) for post in post_glob)
+                    oldest_tstamp = min(self.get_post_timestamp(post) for post in post_glob)
                 else:
                     post_min = min(post_glob, key=lambda f: int(splitext(split(f)[1])[0]))
-                    oldest_tstamp = self.get_post_timestamp(post_min, BeautifulSoup)
+                    oldest_tstamp = self.get_post_timestamp(post_min)
                 logger.info(
                     'Backing up posts before timestamp={} ({})\n'.format(oldest_tstamp, time.ctime(oldest_tstamp)),
                     account=True,
@@ -1257,8 +1232,7 @@ class TumblrBackup:
             if self.options.likes:
                 # Read every post to find the newest timestamp already saved
                 logger.warn('Finding newest liked post (may take a while)\n', account=True)
-                BeautifulSoup = load_bs4('backup likes incrementally')
-                ident_max = max(self.get_post_timestamp(post, BeautifulSoup) for post in post_glob)
+                ident_max = max(self.get_post_timestamp(post) for post in post_glob)
                 logger.info('Backing up posts after timestamp={} ({})\n'.format(ident_max, time.ctime(ident_max)),
                             account=True)
             else:
@@ -1980,19 +1954,13 @@ class TumblrPost:
 
         notes_html = ''
 
-        if self.options.save_notes or self.options.copy_notes:
-            if TYPE_CHECKING:
-                from bs4 import BeautifulSoup  # noqa: WPS474
-            else:
-                BeautifulSoup = load_bs4('save notes' if self.options.save_notes else 'copy notes')
-
         if self.options.copy_notes:
             # Copy notes from prev_archive (or here)
             prev_archive = save_folder if self.options.reuse_json else self.prev_archive
             assert prev_archive is not None
             try:
                 with open(join(prev_archive, post_dir, self.ident + post_ext)) as post_file:
-                    soup = BeautifulSoup(post_file, 'lxml')
+                    soup = BeautifulSoup(post_file, BS_PARSER)
             except FileNotFoundError:
                 pass  # skip
             else:

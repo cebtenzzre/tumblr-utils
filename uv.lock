@@ -1,6 +1,12 @@
 version = 1
 revision = 3
 requires-python = ">=3.10"
+resolution-markers = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'win32'",
+    "platform_machine in 'x86_64, aarch64, i686, armv7l, ppc64le, riscv64' and sys_platform == 'linux'",
+    "(platform_machine not in 'x86_64, aarch64, i686, armv7l, ppc64le, riscv64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+]
 
 [[package]]
 name = "annotated-types"
@@ -957,8 +963,10 @@ name = "tumblr-backup"
 version = "1.6.4.dev0"
 source = { editable = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
     { name = "colorama" },
     { name = "filetype" },
+    { name = "lxml", marker = "(platform_machine in 'x86_64, aarch64, i686, armv7l, ppc64le, riscv64' and sys_platform == 'linux') or sys_platform == 'darwin' or sys_platform == 'win32'" },
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "requests" },
@@ -969,25 +977,17 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "beautifulsoup4" },
     { name = "jq" },
-    { name = "lxml" },
     { name = "py3exiv2" },
     { name = "quickjs" },
     { name = "yt-dlp" },
-]
-bs4 = [
-    { name = "beautifulsoup4" },
-    { name = "lxml" },
 ]
 dash = [
     { name = "quickjs" },
 ]
 dev = [
-    { name = "beautifulsoup4" },
     { name = "flake8" },
     { name = "jq" },
-    { name = "lxml" },
     { name = "mini-racer" },
     { name = "mypy" },
     { name = "py3exiv2" },
@@ -1018,12 +1018,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "beautifulsoup4", marker = "extra == 'bs4'", specifier = ">=4.14.2,<5" },
+    { name = "beautifulsoup4", specifier = ">=4.14.2,<5" },
     { name = "colorama", specifier = ">=0.4.6,<0.5" },
     { name = "filetype", specifier = "~=1.2" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.3.0" },
     { name = "jq", marker = "extra == 'jq'", specifier = "~=1.6" },
-    { name = "lxml", marker = "extra == 'bs4'", specifier = ">=6.0.2,<6.1" },
+    { name = "lxml", marker = "sys_platform == 'darwin'", specifier = ">=6.0.2,<7" },
+    { name = "lxml", marker = "platform_machine in 'x86_64, aarch64, i686, armv7l, ppc64le, riscv64' and sys_platform == 'linux'", specifier = ">=6.0.2,<7" },
+    { name = "lxml", marker = "sys_platform == 'win32'", specifier = ">=6.0.2,<7" },
     { name = "mini-racer", marker = "extra == 'dev'", specifier = ">=0.12.4" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.18.2" },
     { name = "platformdirs", specifier = "~=4.2" },

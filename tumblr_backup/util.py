@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from http.cookiejar import MozillaCookieJar
 from importlib.machinery import PathFinder
-from typing import TYPE_CHECKING, Any, Deque, Generic, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Deque, Final, Generic, Literal, Sequence, TypeVar, cast
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -29,6 +29,29 @@ if TYPE_CHECKING:
 
     class Condition(threading.Condition):
         _waiters: NotifierWaiters
+
+
+def _pick_bs_parser() -> Literal['lxml', 'html.parser']:
+    """Pick the best BeautifulSoup parser available at import time. lxml ships binary
+    wheels for every mainstream platform we declare in pyproject.toml; users on exotic
+    arches (or anyone who skipped the lxml install) transparently fall back to the
+    stdlib parser."""
+    try:
+        import lxml  # noqa: F401
+    except ImportError:
+        logger.info('lxml unavailable on this platform; falling back to html.parser\n')
+        return 'html.parser'
+    return 'lxml'
+
+
+BS_PARSER: Final = _pick_bs_parser()
+
+# Short-circuit bs4's CSS-selector (soupsieve) subsystem: tumblr-backup never calls
+# `.select()`, and bs4 lazy-imports soupsieve only on first use. Pre-populating
+# sys.modules with a sentinel causes any such import to resolve without actually
+# loading the package, saving startup time and memory. setdefault (not `=`) preserves
+# any properly-imported soupsieve that's already present.
+sys.modules.setdefault('soupsieve', ())  # type: ignore[arg-type]
 
 
 def to_bytes(string, encoding='utf-8', errors='strict'):
