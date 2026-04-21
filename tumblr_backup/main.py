@@ -1959,7 +1959,7 @@ class TumblrPost:
         post = self.post_header + '<article class=%s id=p-%s>\n' % (typ, self.ident)
         post += '<header>\n'
         if self.options.likes:
-            post += '<p><a href=\"https://{0}.tumblr.com/\" class=\"tumblr_blog\">{0}</a>:</p>\n'.format(self.creator)
+            post += '<p><a href="https://{0}.tumblr.com/" class="tumblr_blog">{0}</a>:</p>\n'.format(self.creator)
         post += '<p><time datetime=%s>%s</time>\n' % (self.isodate, strftime('%x %X', self.tm))
         post += '<a class=llink href="{}">¶</a>\n'.format(urlpathjoin(save_dir, post_dir, self.llink))
         post += '<a href="%s">●</a>\n' % self.shorturl
@@ -1976,7 +1976,7 @@ class TumblrPost:
         if self.tags:
             foot.append(''.join(self.tag_link(t) for t in self.tags))
         if self.source_title and self.source_url:
-            foot.append(f'<a title=Source href="{self.source_url}">{self.source_title}</a>')
+            foot.append(f'(<a title=Source href="{self.source_url}">{self.source_title}</a>)')
 
         notes_html = ''
 
