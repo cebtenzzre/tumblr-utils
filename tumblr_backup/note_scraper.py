@@ -39,8 +39,7 @@ msg_queue: SimpleQueue[tuple[int, str]] | None = None
 def log(level, url, msg):
     assert msg_queue is not None
     url_msg = ", URL '{}'".format(url) if url != post_url else ''
-    # see https://github.com/google/pytype/issues/1344#issuecomment-1553500779
-    msg_queue.put(  # pytype: disable=attribute-error
+    msg_queue.put(
         (level, '[Note Scraper] Post {}{}: {}\n'.format(ident, url_msg, msg)),
     )
 
