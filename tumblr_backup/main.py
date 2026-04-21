@@ -1871,9 +1871,9 @@ class TumblrPost:
         :rtype: str"""
         for attr in attrs:
             html_tag = re.sub(
-                (r"""(<[a-z-0-9\-]*(?:\s[^>]*?)?)""" #open tag + any preceding attributes
-                r"""(\s*{}(?:\s*=\s*["'].*?["'])?)""" # whitespace + attribute (optional =value) to be removed
-                r"""([^>]*>.*)""").format(attr), # any postceding attributes + close tag + remainder
+                (r"""(<[a-z-0-9\-]*(?:\s[^>]*?)?)"""  # open tag + any preceding attributes
+                    r"""(\s*{}(?:\s*=\s*["'].*?["'])?)"""  # whitespace + attribute (optional =value) to be removed
+                    r"""([^>]*>.*)""").format(attr),  # any postceding attributes + close tag + remainder
 
                 
                 # remove provided attribute (group 2) and preceding whitespace from string
