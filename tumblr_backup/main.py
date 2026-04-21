@@ -1902,7 +1902,7 @@ class TumblrPost:
         # After removal, local images are displayed instead of external ones chosen from srcset.
         # see: https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img#srcset
         # sizes attribute requires srcset so that is removed too.
-        return self.remove_attrs_htmltag(new_html, ['srcset','sizes'])
+        return self.remove_attrs_htmltag(new_html, ['srcset', 'sizes'])
 
     def get_inline_video_poster(self, match):
         """Saves an inline video poster if not saved yet. Returns the new
