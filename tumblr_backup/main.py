@@ -9,6 +9,7 @@ import hashlib
 import http.client
 import importlib.metadata
 import importlib.resources
+import importlib.resources.abc
 import itertools
 import json
 import locale
@@ -96,6 +97,7 @@ else:
     Tag = None
 
 JSONDict: TypeAlias = 'dict[str, Any]'
+_StrPath: TypeAlias = 'str | os.PathLike[str]'
 
 # extra optional packages
 try:
@@ -680,7 +682,11 @@ def add_exif(image_name: str, tags: set[str], exif: set[str]) -> None:
         logger.error('Writing metadata failed for tags {} in {!r}: {!r}\n'.format(tags, image_name, e))
 
 
-def copy_package_file(src: str | importlib.resources.Traversable, *destparts: str, filemode: Literal['t', 'b'] = 't'):
+def copy_package_file(
+        src: str | importlib.resources.abc.Traversable,
+        *destparts: _StrPath,
+        filemode: Literal['t', 'b'] = 't'
+):
     """Copy internal package file to output directory
 
     :param src: source; relative file path, or Traversable (:class:`importlib.resources.Traversable`)
@@ -2564,8 +2570,7 @@ def main():
     parser.add_argument('--notes-limit', type=int, metavar='COUNT', help='limit requested notes to COUNT, per-post')
     parser.add_argument('--cookiefile', help='cookie file for youtube-dl, --save-notes, and internal API')
     parser.add_argument('-j', '--json', action='store_true', help='save the original JSON source')
-    parser.add_argument('-b', '--blosxom', action='store_true',
-                        help='save the posts in blosxom format. See: http://www.blosxom.com/')
+    parser.add_argument('-b', '--blosxom', action='store_true', help='save the posts in blosxom format')
     parser.add_argument('-r', '--reverse-month', action='store_false',
                         help='reverse the post order in the monthly archives')
     parser.add_argument('-R', '--reverse-index', action='store_false', help='reverse the index file order')
@@ -2621,7 +2626,7 @@ def main():
     parser.add_argument('--json-info', action='store_true',
                         help="Just print some info for each blog, don't make a backup")
     parser.add_argument('--no-fonts', action='store_true',
-                        help='Do not load in custom fonts. Only use standard system fonts.')
+                        help='Do not load in custom fonts. Only use standard system fonts')
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
