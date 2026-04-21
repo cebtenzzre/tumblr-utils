@@ -1,6 +1,6 @@
 [project]
 name = "tumblr-backup"
-version = "1.6.3"
+version = "1.6.4.dev0"
 description = "An advanced tool for backing up Tumblr blogs."
 dynamic = ["readme"]
 requires-python = ">=3.10"
@@ -52,14 +52,16 @@ dev = [
     "tumblr-backup[all]",
 
     # dev tools
-    "flake8==7.3.0",
-    "mypy==1.18.2",
-    "wemake-python-styleguide==1.4.0",
+    "flake8>=7.3.0",
+    "mypy>=1.18.2",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "wemake-python-styleguide>=1.4.0",
 
     # type stubs and other optional modules
     "mini-racer>=0.12.4",
     "pysocks>=1.7.1,<2",
-    "types-lxml==2025.08.25",
+    "types-lxml>=2025.08.25",
     "types-requests>=2.32.4.20250913,<3",
     "youtube_dl>=2021.12.17",
 ]
@@ -90,6 +92,10 @@ tumblr_backup = [
     "templates/*",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
 [tool.mypy]
 files = 'tumblr_backup'
 pretty = true
@@ -101,22 +107,6 @@ allow_subclassing_any = true
 allow_untyped_defs = true
 allow_incomplete_defs = true
 disable_error_code = ['import-untyped']
-
-[tool.pytype]
-inputs = ['tumblr_backup']
-jobs = 'auto'
-bind_decorated_methods = true
-none_is_not_bool = true
-overriding_renamed_parameter_count_checks = true
-strict_none_binding = true
-precise_return = true
-# protocols:
-# - https://github.com/google/pytype/issues/1423
-# - https://github.com/google/pytype/issues/1424
-# strict_import: https://github.com/google/pytype/issues/1444
-# strict_parameter_checks: https://github.com/google/pytype/issues/365
-strict_primitive_comparisons = true
-# strict_undefined_checks: too many false positives
 
 [tool.isort]
 src_paths = ['tumblr_backup']
