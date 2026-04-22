@@ -2573,7 +2573,8 @@ def main():
                         help="Just print some info for each blog, don't make a backup")
     parser.add_argument('--force-dashonly', action='store_true',
                         help='Force the use of internal API (normally only used for dashboard-only blogs).'
-                        ' Posts marked explicit are possible to archive this way for blogs the cookies are valid for.')
+                        ' Private or explicit posts are possible to archive this way for blogs the cookies'
+                        ' are valid for')
 
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
@@ -2606,7 +2607,7 @@ def main():
         parser.error('-D cannot be used with --tag-index')
     if options.cookiefile is not None and not os.access(options.cookiefile, os.R_OK):
         parser.error('--cookiefile: file cannot be read')
-    if options.force_dashonly is not None and options.cookiefile is None:
+    if options.force_dashonly and options.cookiefile is None:
         parser.error('--force-dashonly requires valid cookies. Try --cookiefile')
     if options.notes_limit is not None:
         if not options.save_notes:

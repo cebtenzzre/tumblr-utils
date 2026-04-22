@@ -94,9 +94,9 @@ options:
   --json-info           Just print some info for each blog, don't make a
                         backup
   --force-dashonly      Force the use of internal API (normally only used for
-                        dashboard-only blogs). Posts marked explicit are
-                        possible to archive this way for blogs the cookies are
-                        valid for.
+                        dashboard-only blogs). Private or explicit posts are
+                        possible to archive this way for blogs the cookies
+                        are valid for
 ```
 
 ## Arguments
