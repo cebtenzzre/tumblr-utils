@@ -1509,6 +1509,25 @@ class TumblrBackup:
         self.total_count += self.post_count
 
 
+def _rewrite_img_src(tag_html: str, new_src: str) -> str:
+    """Parse a single ``<img>`` tag and return it with ``src`` set to ``new_src``
+    and ``srcset``/``sizes`` stripped.
+
+    Per HTML5 (https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img#srcset),
+    ``srcset`` with width descriptors overrides ``src``. Tumblr emits both, which made
+    offline backups load nothing because the ``srcset`` URLs still point at tumblr's
+    CDN. ``sizes`` requires ``srcset`` and becomes dead weight without it.
+    """
+    soup = BeautifulSoup(tag_html, BS_PARSER)
+    img = soup.img
+    if img is None:
+        raise ValueError(f'expected an <img> tag, got: {tag_html!r}')
+    img['src'] = new_src
+    for attr in ('srcset', 'sizes'):
+        img.attrs.pop(attr, None)
+    return str(img)
+
+
 class TumblrPost:
     post_header = ''  # set by TumblrBackup.backup()
 
@@ -1843,7 +1862,7 @@ class TumblrPost:
         saved_name = self.download_media(image_url, filename=image_filename)
         if saved_name is None:
             return match.group(0)
-        return match.group(1) + self.media_url + '/' + saved_name + match.group(3)
+        return _rewrite_img_src(match.group(0), f'{self.media_url}/{saved_name}')
 
     def get_inline_video_poster(self, match):
         """Saves an inline video poster if not saved yet. Returns the new
