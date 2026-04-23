@@ -424,12 +424,13 @@ class AsyncCallable:
         self.thread.join()
 
 
-def opendir(dir_, flags):
+def opendir(path: str | os.PathLike[str], flags: int) -> int:
+    path = os.fspath(path)
     try:
         flags |= os.O_DIRECTORY
     except AttributeError:
-        dir_ += os.path.sep  # Fallback, some systems don't support O_DIRECTORY
-    return os.open(dir_, flags)
+        path += os.path.sep  # Fallback, some systems don't support O_DIRECTORY
+    return os.open(path, flags)
 
 
 def try_unlink(path):

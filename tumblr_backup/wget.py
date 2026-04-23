@@ -13,6 +13,7 @@ from email.utils import mktime_tz, parsedate_tz
 from enum import Enum
 from http.client import (HTTPConnection as _HTTPConnection, HTTPMessage as _HttplibHTTPMessage,
                          HTTPResponse as _HttplibHTTPResponse, ResponseNotReady)
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import IO, TYPE_CHECKING, Any, BinaryIO, Callable, Dict, Iterable, Mapping, Optional, Set
 from urllib.parse import urljoin, urlsplit
@@ -60,6 +61,7 @@ class HttpStat:
     contlen: Optional[int]
     last_modified: Optional[str]
     remote_time: Optional[int]
+    dest: Optional[Path]
     dest_dir: Optional[int]
     part_file: Optional[BinaryIO]
     remote_encoding: Optional[str]
@@ -76,6 +78,7 @@ class HttpStat:
         self.last_modified = None    # Last-Modified header
         self.remote_time = None      # remote time-stamp
         self.statcode = 0            # status code
+        self.dest = None             # final destination path (set by _retrieve_loop)
         self.dest_dir = None         # handle to the directory containing part_file
         self.part_file = None        # handle to local file used for in-progress download
         self.remote_encoding = None  # the encoding of the remote file
@@ -689,13 +692,13 @@ def _retrieve_loop(
         raise WGUnreachableHostError(logger, url, 'Host {} is ignored.'.format(hostname))
 
     doctype = 0
-    dest_dirname, dest_basename = os.path.split(dest_file)
+    hstat.dest = Path(dest_file)
 
     if os.name == 'posix':  # Opening directories is a POSIX feature
-        hstat.dest_dir = opendir(dest_dirname, os.O_RDONLY)
+        hstat.dest_dir = opendir(hstat.dest.parent, os.O_RDONLY)
     hstat.set_part_file_supplier(functools.partial(
         lambda pfx, dir_: NamedTemporaryFile('wb', prefix=pfx, dir=dir_, delete=False),
-        '.{}.'.format(dest_basename), dest_dirname,
+        '.{}.'.format(hstat.dest.name), hstat.dest.parent,
     ))
 
     # THE loop
@@ -818,12 +821,12 @@ def _retrieve_loop(
 
         # Adjust the new name
         if adjust_basename is None:
-            new_dest_basename = dest_basename
+            new_dest_basename = hstat.dest.name
         else:
             # Give adjust_basename a read-only file handle
             pf = open(hstat.part_file.fileno(), 'rb', closefd=False)
             pf.seek(0)
-            new_dest_basename = adjust_basename(dest_basename, pf)
+            new_dest_basename = adjust_basename(hstat.dest.name, pf)
 
         # Sync the inode
         fsync(hstat.part_file)
@@ -833,7 +836,7 @@ def _retrieve_loop(
             hstat.part_file = None
 
         # Move to final destination
-        new_dest = os.path.join(dest_dirname, new_dest_basename)
+        new_dest = hstat.dest.with_name(new_dest_basename)
         if os.rename not in os.supports_dir_fd:
             os.replace(pfname, new_dest)
         else:
