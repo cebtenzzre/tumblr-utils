@@ -70,6 +70,7 @@ from .npf.models import (
     _content_block_list_adapter,
 )
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
+from .filename import sanitize_filename
 from .util import (
     AsyncCallable,
     BS_PARSER,
@@ -1908,8 +1909,7 @@ class TumblrPost:
             return self.ident + offset + ext
         if image_names == 'bi':
             return self.backup_account + '_' + self.ident + offset + ext
-        # delete characters not allowed under Windows
-        return re.sub(r'[:<>"/\\|*?]', '', fname) if os.name == 'nt' else fname
+        return sanitize_filename(fname)
 
     def download_media(self, url, filename=None, offset='', extension=None):
         parsed_url = urlparse(url, 'http')
