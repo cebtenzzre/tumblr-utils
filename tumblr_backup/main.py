@@ -2102,7 +2102,7 @@ class TumblrPost:
             dstpath = open_file(lambda f: f, path_parts)
 
             try:
-                wget_retrieve(
+                hstat = wget_retrieve(
                     url,
                     dstpath,
                     post_id=self.ident,
@@ -2111,6 +2111,7 @@ class TumblrPost:
             except WGError as e:
                 e.log()
                 return None
+            return hstat.dest.name
         if file_exists:
             try:
                 st = os.stat(media_path)
