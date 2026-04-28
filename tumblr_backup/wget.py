@@ -697,7 +697,6 @@ def _retrieve_loop(
     dest_file: str,
     post_id: Optional[str],
     post_timestamp: Optional[float],
-    adjust_basename: Optional[Callable[[str, BinaryIO], str]],
     log: Callable[[LogLevel, str], None],
     use_dns_check: bool,
     use_internet_archive: bool,
@@ -840,15 +839,6 @@ def _retrieve_loop(
                 tstamp = min(hstat.remote_time, post_timestamp)
             touch(pfname, tstamp, dir_fd=hstat.dest_dir)
 
-        # Adjust the basename if a magic-byte callback was provided.
-        # Header-driven resolution (resolve_basename) already updated hstat.dest
-        # in process_response, so hstat.dest.name is correct without a branch.
-        if adjust_basename is not None:
-            pf = open(hstat.part_file.fileno(), 'rb', closefd=False)
-            pf.seek(0)
-            new_dest_basename = adjust_basename(hstat.dest.name, pf)
-            hstat.dest = hstat.dest.with_name(new_dest_basename)
-
         # Sync the inode
         fsync(hstat.part_file)
         try:
@@ -893,16 +883,21 @@ def urlopen(url, use_dns_check: bool, headers: Optional[Dict[str, str]] = None, 
 
 # This functor is the primary API of this module.
 class WgetRetrieveWrapper:
-    def __init__(self, log: Callable[[LogLevel, str], None], options: Namespace):
+    def __init__(
+        self, log: Callable[[LogLevel, str], None], options: Namespace,
+        resolve_basename: Optional[ResolveBasename] = None,
+    ):
         self.log = log
         self.options = options
+        self.resolve_basename = resolve_basename
 
-    def __call__(self, url, file, post_id=None, post_timestamp=None, adjust_basename=None):
+    def __call__(self, url, file, post_id=None, post_timestamp=None):
         hstat = HttpStat()
+        hstat.resolve_basename = self.resolve_basename
         try:
             _retrieve_loop(
-                hstat, url, file, post_id, post_timestamp, adjust_basename, self.log,
-                use_dns_check=self.options.use_dns_check, use_internet_archive=self.options.internet_archive,
+                hstat, url, file, post_id, post_timestamp, self.log, use_dns_check=self.options.use_dns_check,
+                use_internet_archive=self.options.internet_archive,
                 use_server_timestamps=self.options.use_server_timestamps,
             )
         finally:

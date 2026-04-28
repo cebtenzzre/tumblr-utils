@@ -25,7 +25,6 @@ dependencies = [
     "lxml>=6.0.2,<7; sys_platform == 'darwin'",
     "lxml>=6.0.2,<7; sys_platform == 'linux' and platform_machine in 'x86_64, aarch64, i686, armv7l, ppc64le, riscv64'",
     "colorama>=0.4.6,<0.5",
-    "filetype~=1.2",
     "platformdirs~=4.2",
     "pydantic>=2.12.3,<3",
     "requests>=2.32.5,<3",

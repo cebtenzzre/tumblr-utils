@@ -27,7 +27,6 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from filetype.types import image as image_types
 from functools import partial
 from multiprocessing.queues import SimpleQueue
 from os.path import join, split, splitext
@@ -38,7 +37,6 @@ from types import ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
-    BinaryIO,
     Callable,
     ClassVar,
     ContextManager,
@@ -54,7 +52,6 @@ from xml.sax.saxutils import escape, quoteattr
 
 # third-party modules
 import colorama
-import filetype
 import platformdirs
 import requests
 
@@ -70,7 +67,7 @@ from .npf.models import (
     _content_block_list_adapter,
 )
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
-from .filename import sanitize_filename
+from .filename import resolve_tumblr_basename, sanitize_filename
 from .util import (
     AsyncCallable,
     BS_PARSER,
@@ -717,17 +714,9 @@ def get_avatar(account: str, prev_archive: str | os.PathLike[str], no_get: bool)
     if next(avatar_matches, None) is not None:
         return  # Do not clobber
 
-    def adj_bn(old_bn, f):
-        # Give it an extension
-        kind = filetype.guess(f)
-        if kind:
-            return old_bn + '.' + kind.extension
-        return old_bn
-
-    # Download the image
     assert wget_retrieve is not None
     try:
-        wget_retrieve(url, avatar_dest, adjust_basename=adj_bn)
+        wget_retrieve(url, avatar_dest)
     except WGError as e:
         e.log()
 
@@ -2112,30 +2101,12 @@ class TumblrPost:
             assert wget_retrieve is not None
             dstpath = open_file(lambda f: f, path_parts)
 
-            def adjust_basename(old_bn: str, f: BinaryIO) -> str:
-                """Map .pnj and .gifv extensions -> .jpg/.png and .gif respectively."""
-                stem, ext = splitext(old_bn)
-                header = f.read(4)
-                match ext.lower():
-                    case '.pnj' if image_types.Jpeg().match(header):
-                        ext = '.jpg'
-                    case '.pnj' if image_types.Png().match(header):
-                        ext = '.png'
-                    case '.gifv' if image_types.Gif().match(header):
-                        ext = '.gif'
-                return stem + ext
-
-            # Adjust filename extension for Tumblr media URLs based on actual content type
-            parsed_url = urlparse(url)
-            is_tumblr_media = parsed_url.hostname and parsed_url.hostname.endswith('.media.tumblr.com')
-
             try:
                 wget_retrieve(
                     url,
                     dstpath,
                     post_id=self.ident,
                     post_timestamp=self.post['timestamp'],
-                    adjust_basename=adjust_basename if is_tumblr_media else None,
                 )
             except WGError as e:
                 e.log()
@@ -2634,7 +2605,7 @@ def main():
         print(textwrap.dedent(msg), file=sys.stderr)
         return 1
 
-    wget_retrieve = WgetRetrieveWrapper(logger.log, options)
+    wget_retrieve = WgetRetrieveWrapper(logger.log, options, resolve_basename=resolve_tumblr_basename)
     setup_wget(not options.no_ssl_verify, options.user_agent)
 
     ApiParser.setup(api_key, options.no_ssl_verify, options.user_agent, options.cookiefile)
