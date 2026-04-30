@@ -5,10 +5,11 @@ import argparse
 import calendar
 import contextlib
 import errno
-from contextlib import contextmanager
 import hashlib
 import http.client
 import importlib.metadata
+import importlib.resources
+import importlib.resources.abc
 import itertools
 import json
 import locale
@@ -94,6 +95,7 @@ if TYPE_CHECKING:
     from typing_extensions import TypeAlias
 
 JSONDict: TypeAlias = 'dict[str, Any]'
+_StrPath: TypeAlias = 'str | os.PathLike[str]'
 
 # extra optional packages
 try:
@@ -140,9 +142,22 @@ theme_dir = 'theme'
 save_dir = '..'
 backup_css = 'backup.css'
 custom_css = 'custom.css'
+fonts_dir = 'fonts'
+lucille_font_noext = 'lucille_esque'
+lucille_font_exts = ['.eot', '.woff2', '.woff', '.ttf']
+assert sum(1 for x in lucille_font_exts if '.' not in x) == 0  # sanity check: ensure dot-prefixed
+lucille_font_license = 'font_lucille_esque_LICENSE.txt'
 avatar_base = 'avatar'
 dir_index = 'index.html'
 tag_index_dir = 'tags'
+template_dir = 'templates'
+asset_dir = 'assets'
+package_files = {
+    backup_css : 'backup.css',
+    lucille_font_noext : 'Rochester-Regular',
+    lucille_font_license : 'Rochester_LICENSE.txt',
+}
+
 
 post_ext = '.html'
 have_custom_css = False
@@ -179,9 +194,10 @@ disable_note_scraper: set[str] = set()
 disablens_lock = threading.Lock()
 downloading_media: set[str] = set()
 downloading_media_cond = threading.Condition()
+package_file_traversable = importlib.resources.files()  # Traversable to be used for package data files
 
 
-@contextmanager
+@contextlib.contextmanager
 def acquire_media_download(media_path: str, *, check_exists: Callable[[], bool] | None = None) -> Iterator[bool]:
     """
     Context manager to serialize downloads of the same media file.
@@ -276,6 +292,13 @@ class open_outfile:
 def open_text(*parts, mode='w') -> Iterator[TextIO]:
     assert 'b' not in mode
     with open_outfile(mode, *parts, encoding=FILE_ENCODING, errors='xmlcharrefreplace') as f:
+        yield f
+
+
+@contextlib.contextmanager
+def open_bin(*parts, mode='wb') -> Iterator[TextIO]:
+    assert 'b' in mode
+    with open_outfile(mode, *parts) as f:
         yield f
 
 
@@ -640,22 +663,59 @@ def add_exif(image_name: str, tags: set[str], exif: set[str]) -> None:
         logger.error('Writing metadata failed for tags {} in {!r}: {!r}\n'.format(tags, image_name, e))
 
 
-def save_style():
-    with open_text(backup_css) as css:
-        css.write(textwrap.dedent("""\
-            @import url("override.css");
+def copy_package_file(
+        src: str | importlib.resources.abc.Traversable,
+        *destparts: _StrPath,
+        filemode: Literal['t', 'b'] = 't'
+):
+    """Copy internal package file to output directory
 
-            body { width: 720px; margin: 0 auto; }
-            body > footer { padding: 1em 0; }
-            header > img { float: right; }
-            img { max-width: 720px; }
-            blockquote { margin-left: 0; border-left: 8px #999 solid; padding: 0 24px; }
-            .archive h1, .subtitle, article { padding-bottom: 0.75em; border-bottom: 1px #ccc dotted; }
-            article[class^="liked-"] { background-color: #f0f0f8; }
-            .post a.llink { display: none; }
-            header a, footer a { text-decoration: none; }
-            footer, article footer a { font-size: small; color: #999; }
-        """))
+    :param src: source; relative file path, or Traversable (:class:`importlib.resources.Traversable`)
+    :type src: str | importlib.resources.Traversable
+    :param destparts: destination filepath parts
+    :type destparts: str
+    :param filemode: whether to copy as text or bytes
+    :type filemode: Literal['t', 'b']
+
+    :raise AssertError: if provided src does not exist or is not a file
+    :raise IOError: if one of the files could not be opened or read from/written to.
+    """
+    if isinstance(src, str):
+        src_trav = package_file_traversable.joinpath(src)
+    else:
+        src_trav = src
+    assert src_trav.is_file()
+
+    # note: usage of temporary file (see as_file) to access package file from all contexts
+    #   (s.a. being run from a zip file)
+    with importlib.resources.as_file(src_trav) as src_path:
+        if filemode == 't':
+            with open(src_path) as fsrc, open_text(*destparts) as fdst:
+                shutil.copyfileobj(fsrc, fdst)
+        if filemode == 'b':
+            with open(src_path, 'rb') as fsrc, open_bin(*destparts, mode='wb') as fdst:
+                shutil.copyfileobj(fsrc, fdst)
+
+
+def save_style(no_custom_fonts: bool):
+    """Saves style information to the output directory"""
+    # write css file
+    css_template_fd_trav = package_file_traversable.joinpath(template_dir, package_files[backup_css])
+    copy_package_file(css_template_fd_trav, backup_css)
+
+    if no_custom_fonts:
+        return  # do not copy custom fonts into directory. Use only system fonts.
+    # TODO: (if templating) also remove references to these fonts in the CSS file when this flag is on.
+
+    # write font files (Lucille replacement)
+    for ext in lucille_font_exts:
+        font_fd_trav = package_file_traversable.joinpath(asset_dir, package_files[lucille_font_noext] + ext)
+        copy_package_file(font_fd_trav, fonts_dir, lucille_font_noext + ext, filemode='b')
+
+    # write font file license (Lucille replacement)
+    font_license_fd_trav = package_file_traversable.joinpath(asset_dir, package_files[lucille_font_license])
+    copy_package_file(font_license_fd_trav, fonts_dir, lucille_font_license)
+
 
 
 def find_files(
@@ -1285,7 +1345,7 @@ class TumblrBackup:
             get_avatar(account, prev_archive, no_get=self.options.no_get)
             get_style(account, prev_archive, no_get=self.options.no_get, use_dns_check=self.options.use_dns_check)
             if not have_custom_css:
-                save_style()
+                save_style(self.orig_options.get('no_fonts', False))
             logger.status('Building index\r')
             ix = Indices(
                 self, self.options.posts_per_page, dirs=self.options.dirs, reverse_month=self.options.reverse_month,
@@ -2524,6 +2584,8 @@ def main():
                         help='file containing a list of post IDs to save, one per line')
     parser.add_argument('--json-info', action='store_true',
                         help="Just print some info for each blog, don't make a backup")
+    parser.add_argument('--no-fonts', action='store_true',
+                        help='Do not load in custom fonts. Only use standard system fonts')
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
