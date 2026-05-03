@@ -1,0 +1,29 @@
+name: announce-release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  announce:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+          RELEASE_NAME: ${{ github.event.release.name || github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          jq -n \
+            --arg title "tumblr-backup $RELEASE_NAME" \
+            --arg url "$RELEASE_URL" \
+            --arg desc "$RELEASE_BODY" \
+            '{embeds: [{
+              title: $title,
+              url: $url,
+              description: $desc,
+              color: 3066993
+            }]}' \
+          | curl -sSf -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"

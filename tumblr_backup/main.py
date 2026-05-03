@@ -28,7 +28,6 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from filetype.types import image as image_types
 from functools import partial
 from multiprocessing.queues import SimpleQueue
 from os.path import join, split, splitext
@@ -39,7 +38,6 @@ from types import ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
-    BinaryIO,
     Callable,
     ClassVar,
     ContextManager,
@@ -55,7 +53,6 @@ from xml.sax.saxutils import escape, quoteattr
 
 # third-party modules
 import colorama
-import filetype
 import platformdirs
 import requests
 
@@ -71,8 +68,10 @@ from .npf.models import (
     _content_block_list_adapter,
 )
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
+from .filename import resolve_tumblr_basename, sanitize_filename
 from .util import (
     AsyncCallable,
+    BS_PARSER,
     LockedQueue,
     copyfile,
     enospc,
@@ -90,11 +89,10 @@ from .util import (
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
 from .logging import LogLevel, logger
 
+from bs4 import BeautifulSoup, Tag
+
 if TYPE_CHECKING:
-    from bs4 import Tag
     from typing_extensions import TypeAlias
-else:
-    Tag = None
 
 JSONDict: TypeAlias = 'dict[str, Any]'
 _StrPath: TypeAlias = 'str | os.PathLike[str]'
@@ -230,23 +228,6 @@ def acquire_media_download(media_path: str, *, check_exists: Callable[[], bool] 
         with downloading_media_cond:
             downloading_media.remove(media_path)
             downloading_media_cond.notify_all()
-
-
-def load_bs4(reason):
-    sys.modules['soupsieve'] = ()  # type: ignore[assignment]
-    try:
-        import lxml  # noqa: F401
-        from bs4 import BeautifulSoup
-    except ImportError:
-        print(
-            f'Cannot {reason} without the bs4 component.\n'
-            'See the installation guide for setup instructions:\n'
-            'https://cebtenzzre.github.io/tumblr-utils/installation/#optional-extras',
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return BeautifulSoup
-
 
 
 
@@ -793,17 +774,9 @@ def get_avatar(account: str, prev_archive: str | os.PathLike[str], no_get: bool)
     if next(avatar_matches, None) is not None:
         return  # Do not clobber
 
-    def adj_bn(old_bn, f):
-        # Give it an extension
-        kind = filetype.guess(f)
-        if kind:
-            return old_bn + '.' + kind.extension
-        return old_bn
-
-    # Download the image
     assert wget_retrieve is not None
     try:
-        wget_retrieve(url, avatar_dest, adjust_basename=adj_bn)
+        wget_retrieve(url, avatar_dest)
     except WGError as e:
         e.log()
 
@@ -875,8 +848,6 @@ def check_optional_modules(options: Namespace) -> None:
             raise RuntimeError("--exif: module 'pyexiv2' is missing features, perhaps you need 'py3exiv2'?")
     if options.filter is not None and jq is None:
         raise RuntimeError("--filter: module 'jq' is not installed")
-    if options.save_notes or options.copy_notes:
-        load_bs4('save notes' if options.save_notes else 'copy notes')
     if options.save_video and not (have_module('yt_dlp') or have_module('youtube_dl')):
         raise RuntimeError("--save-video: module 'youtube_dl' is not installed")
 
@@ -1150,14 +1121,9 @@ class TumblrBackup:
         return f
 
     @staticmethod
-    def get_post_timestamp(post, bs4_class):
-        if TYPE_CHECKING:
-            from bs4 import BeautifulSoup  # noqa: WPS474
-        else:
-            BeautifulSoup = bs4_class
-
+    def get_post_timestamp(post):
         with open(post, encoding=FILE_ENCODING) as pf:
-            soup = BeautifulSoup(pf, 'lxml')
+            soup = BeautifulSoup(pf, BS_PARSER)
         postdate = cast(Tag, soup.find('time'))['datetime']
         # datetime.fromisoformat does not understand 'Z' suffix
         return int(datetime.strptime(cast(str, postdate), '%Y-%m-%dT%H:%M:%SZ').timestamp())
@@ -1237,13 +1203,12 @@ class TumblrBackup:
                 raise RuntimeError('{}: Cannot continue empty backup'.format(account))
             else:
                 logger.warn('Found incomplete backup.\n', account=True)
-                BeautifulSoup = load_bs4('continue incomplete backup')
                 if self.options.likes:
                     logger.warn('Finding oldest liked post (may take a while)\n', account=True)
-                    oldest_tstamp = min(self.get_post_timestamp(post, BeautifulSoup) for post in post_glob)
+                    oldest_tstamp = min(self.get_post_timestamp(post) for post in post_glob)
                 else:
                     post_min = min(post_glob, key=lambda f: int(splitext(split(f)[1])[0]))
-                    oldest_tstamp = self.get_post_timestamp(post_min, BeautifulSoup)
+                    oldest_tstamp = self.get_post_timestamp(post_min)
                 logger.info(
                     'Backing up posts before timestamp={} ({})\n'.format(oldest_tstamp, time.ctime(oldest_tstamp)),
                     account=True,
@@ -1317,8 +1282,7 @@ class TumblrBackup:
             if self.options.likes:
                 # Read every post to find the newest timestamp already saved
                 logger.warn('Finding newest liked post (may take a while)\n', account=True)
-                BeautifulSoup = load_bs4('backup likes incrementally')
-                ident_max = max(self.get_post_timestamp(post, BeautifulSoup) for post in post_glob)
+                ident_max = max(self.get_post_timestamp(post) for post in post_glob)
                 logger.info('Backing up posts after timestamp={} ({})\n'.format(ident_max, time.ctime(ident_max)),
                             account=True)
             else:
@@ -1593,6 +1557,25 @@ class TumblrBackup:
             account=True,
         )
         self.total_count += self.post_count
+
+
+def _rewrite_img_src(tag_html: str, new_src: str) -> str:
+    """Parse a single ``<img>`` tag and return it with ``src`` set to ``new_src``
+    and ``srcset``/``sizes`` stripped.
+
+    Per HTML5 (https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img#srcset),
+    ``srcset`` with width descriptors overrides ``src``. Tumblr emits both, which made
+    offline backups load nothing because the ``srcset`` URLs still point at tumblr's
+    CDN. ``sizes`` requires ``srcset`` and becomes dead weight without it.
+    """
+    soup = BeautifulSoup(tag_html, BS_PARSER)
+    img = soup.img
+    if img is None:
+        raise ValueError(f'expected an <img> tag, got: {tag_html!r}')
+    img['src'] = new_src
+    for attr in ('srcset', 'sizes'):
+        img.attrs.pop(attr, None)
+    return str(img)
 
 
 class TumblrPost:
@@ -1929,7 +1912,7 @@ class TumblrPost:
         saved_name = self.download_media(image_url, filename=image_filename)
         if saved_name is None:
             return match.group(0)
-        return match.group(1) + self.media_url + '/' + saved_name + match.group(3)
+        return _rewrite_img_src(match.group(0), f'{self.media_url}/{saved_name}')
 
     def get_inline_video_poster(self, match):
         """Saves an inline video poster if not saved yet. Returns the new
@@ -1975,8 +1958,7 @@ class TumblrPost:
             return self.ident + offset + ext
         if image_names == 'bi':
             return self.backup_account + '_' + self.ident + offset + ext
-        # delete characters not allowed under Windows
-        return re.sub(r'[:<>"/\\|*?]', '', fname) if os.name == 'nt' else fname
+        return sanitize_filename(fname)
 
     def download_media(self, url, filename=None, offset='', extension=None):
         parsed_url = urlparse(url, 'http')
@@ -2040,19 +2022,13 @@ class TumblrPost:
 
         notes_html = ''
 
-        if self.options.save_notes or self.options.copy_notes:
-            if TYPE_CHECKING:
-                from bs4 import BeautifulSoup  # noqa: WPS474
-            else:
-                BeautifulSoup = load_bs4('save notes' if self.options.save_notes else 'copy notes')
-
         if self.options.copy_notes:
             # Copy notes from prev_archive (or here)
             prev_archive = save_folder if self.options.reuse_json else self.prev_archive
             assert prev_archive is not None
             try:
                 with open(join(prev_archive, post_dir, self.ident + post_ext)) as post_file:
-                    soup = BeautifulSoup(post_file, 'lxml')
+                    soup = BeautifulSoup(post_file, BS_PARSER)
             except FileNotFoundError:
                 pass  # skip
             else:
@@ -2185,34 +2161,17 @@ class TumblrPost:
             assert wget_retrieve is not None
             dstpath = open_file(lambda f: f, path_parts)
 
-            def adjust_basename(old_bn: str, f: BinaryIO) -> str:
-                """Map .pnj and .gifv extensions -> .jpg/.png and .gif respectively."""
-                stem, ext = splitext(old_bn)
-                header = f.read(4)
-                match ext.lower():
-                    case '.pnj' if image_types.Jpeg().match(header):
-                        ext = '.jpg'
-                    case '.pnj' if image_types.Png().match(header):
-                        ext = '.png'
-                    case '.gifv' if image_types.Gif().match(header):
-                        ext = '.gif'
-                return stem + ext
-
-            # Adjust filename extension for Tumblr media URLs based on actual content type
-            parsed_url = urlparse(url)
-            is_tumblr_media = parsed_url.hostname and parsed_url.hostname.endswith('.media.tumblr.com')
-
             try:
-                wget_retrieve(
+                hstat = wget_retrieve(
                     url,
                     dstpath,
                     post_id=self.ident,
                     post_timestamp=self.post['timestamp'],
-                    adjust_basename=adjust_basename if is_tumblr_media else None,
                 )
             except WGError as e:
                 e.log()
                 return None
+            return hstat.dest.name
         if file_exists:
             try:
                 st = os.stat(media_path)
@@ -2709,7 +2668,7 @@ def main():
         print(textwrap.dedent(msg), file=sys.stderr)
         return 1
 
-    wget_retrieve = WgetRetrieveWrapper(logger.log, options)
+    wget_retrieve = WgetRetrieveWrapper(logger.log, options, resolve_basename=resolve_tumblr_basename)
     setup_wget(not options.no_ssl_verify, options.user_agent)
 
     ApiParser.setup(api_key, options.no_ssl_verify, options.user_agent, options.cookiefile)

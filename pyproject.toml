@@ -1,6 +1,6 @@
 [project]
 name = "tumblr-backup"
-version = "1.6.4.dev0"
+version = "1.6.5"
 description = "An advanced tool for backing up Tumblr blogs."
 dynamic = ["readme"]
 requires-python = ">=3.10"
@@ -18,8 +18,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
+    "beautifulsoup4>=4.14.2,<5",
+    # lxml: require where a binary wheel exists so no user hits a libxml2-dev compile.
+    # Runtime falls back to html.parser (stdlib) on platforms without a wheel.
+    "lxml>=6.0.2,<7; sys_platform == 'win32'",
+    "lxml>=6.0.2,<7; sys_platform == 'darwin'",
+    "lxml>=6.0.2,<7; sys_platform == 'linux' and platform_machine in 'x86_64, aarch64, i686, armv7l, ppc64le, riscv64'",
     "colorama>=0.4.6,<0.5",
-    "filetype~=1.2",
     "platformdirs~=4.2",
     "pydantic>=2.12.3,<3",
     "requests>=2.32.5,<3",
@@ -29,10 +34,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-bs4 = [
-    "beautifulsoup4>=4.14.2,<5",
-    "lxml>=6.0.2,<6.1",
-]
+# Deprecated alias: bs4 + lxml are now core dependencies.
+bs4 = []
 dash = [
     "quickjs>=1.19.4,<2",
 ]
