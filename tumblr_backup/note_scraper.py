@@ -17,7 +17,7 @@ from urllib3 import Retry, Timeout
 from urllib3.exceptions import HTTPError, InsecureRequestWarning
 
 from .logging import LogLevel
-from .util import is_tumblr_reachable, make_requests_session, setup_urllib3_ssl, to_bytes
+from .util import BS_PARSER, is_tumblr_reachable, make_requests_session, setup_urllib3_ssl, to_bytes
 
 setup_urllib3_ssl()
 
@@ -200,7 +200,7 @@ class WebCrawler:
             if resp_str is None:
                 break
 
-            soup = BeautifulSoup(resp_str, 'lxml')
+            soup = BeautifulSoup(resp_str, BS_PARSER)
             if not self.append_notes(soup, notes_list, notes_url):
                 break
 
