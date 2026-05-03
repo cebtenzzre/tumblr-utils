@@ -111,7 +111,6 @@ pip install "tumblr-backup[video]"
 |---------|-------------|
 | `video` | Save video files (uses yt-dlp) |
 | `exif`  | Add post tags to image EXIF metadata |
-| `bs4`   | Save post notes (likes/reblogs) |
 | `jq`    | Filter posts with custom rules |
 | `dash`  | Back up dashboard-only blogs |
 | `all`   | All of the above |
