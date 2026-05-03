@@ -94,8 +94,6 @@ options:
                         line
   --json-info           Just print some info for each blog, don't make a
                         backup
-  --no-fonts            Do not load in custom fonts. Only use standard system
-                        fonts
 ```
 
 ## Arguments

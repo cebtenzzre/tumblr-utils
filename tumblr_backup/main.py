@@ -697,15 +697,11 @@ def copy_package_file(
                 shutil.copyfileobj(fsrc, fdst)
 
 
-def save_style(no_custom_fonts: bool):
+def save_style():
     """Saves style information to the output directory"""
     # write css file
     css_template_fd_trav = package_file_traversable.joinpath(template_dir, package_files[backup_css])
     copy_package_file(css_template_fd_trav, backup_css)
-
-    if no_custom_fonts:
-        return  # do not copy custom fonts into directory. Use only system fonts.
-    # TODO: (if templating) also remove references to these fonts in the CSS file when this flag is on.
 
     # write font files (Lucille replacement)
     for ext in lucille_font_exts:
@@ -1345,7 +1341,7 @@ class TumblrBackup:
             get_avatar(account, prev_archive, no_get=self.options.no_get)
             get_style(account, prev_archive, no_get=self.options.no_get, use_dns_check=self.options.use_dns_check)
             if not have_custom_css:
-                save_style(self.orig_options.get('no_fonts', False))
+                save_style()
             logger.status('Building index\r')
             ix = Indices(
                 self, self.options.posts_per_page, dirs=self.options.dirs, reverse_month=self.options.reverse_month,
@@ -2584,8 +2580,6 @@ def main():
                         help='file containing a list of post IDs to save, one per line')
     parser.add_argument('--json-info', action='store_true',
                         help="Just print some info for each blog, don't make a backup")
-    parser.add_argument('--no-fonts', action='store_true',
-                        help='Do not load in custom fonts. Only use standard system fonts')
     parser.add_argument('blogs', nargs='*')
     options = parser.parse_args()
 
