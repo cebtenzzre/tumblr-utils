@@ -13,8 +13,9 @@ from email.utils import mktime_tz, parsedate_tz
 from enum import Enum
 from http.client import (HTTPConnection as _HTTPConnection, HTTPMessage as _HttplibHTTPMessage,
                          HTTPResponse as _HttplibHTTPResponse, ResponseNotReady)
+from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import IO, TYPE_CHECKING, Any, BinaryIO, Callable, Dict, Iterable, Mapping, Optional, Set
+from typing import IO, TYPE_CHECKING, Any, BinaryIO, Callable, Dict, Iterable, Mapping, Optional, Protocol, Set
 from urllib.parse import urljoin, urlsplit
 
 from urllib3 import (BaseHTTPResponse, HTTPConnectionPool, HTTPHeaderDict, HTTPResponse, HTTPSConnectionPool,
@@ -55,33 +56,41 @@ class UErr(Enum):
     RETRFINISHED = 2
 
 
+class ResolveBasename(Protocol):
+    def __call__(self, old_basename: str, final_url: str, headers: Mapping[str, str]) -> str: ...
+
+
 class HttpStat:
     current_url: Optional[Any]
     contlen: Optional[int]
     last_modified: Optional[str]
     remote_time: Optional[int]
+    dest: Optional[Path]
     dest_dir: Optional[int]
     part_file: Optional[BinaryIO]
     remote_encoding: Optional[str]
     enc_is_identity: Optional[bool]
     decoder: Optional[object]
+    resolve_basename: Optional[ResolveBasename]
     _make_part_file: Optional[Callable[[], BinaryIO]]
 
     def __init__(self):
-        self.current_url = None      # the most recent redirect, otherwise the initial url
-        self.bytes_read = 0          # received length
-        self.bytes_written = 0       # written length
-        self.contlen = None          # expected length
-        self.restval = 0             # the restart value
-        self.last_modified = None    # Last-Modified header
-        self.remote_time = None      # remote time-stamp
-        self.statcode = 0            # status code
-        self.dest_dir = None         # handle to the directory containing part_file
-        self.part_file = None        # handle to local file used for in-progress download
-        self.remote_encoding = None  # the encoding of the remote file
-        self.enc_is_identity = None  # whether the remote encoding is identity
-        self.decoder = None          # saved decoder from the HTTPResponse
-        self._make_part_file = None  # part_file supplier
+        self.current_url = None       # the most recent redirect, otherwise the initial url
+        self.bytes_read = 0           # received length
+        self.bytes_written = 0        # written length
+        self.contlen = None           # expected length
+        self.restval = 0              # the restart value
+        self.last_modified = None     # Last-Modified header
+        self.remote_time = None       # remote time-stamp
+        self.statcode = 0             # status code
+        self.dest = None              # final destination path (set by _retrieve_loop)
+        self.dest_dir = None          # handle to the directory containing part_file
+        self.part_file = None         # handle to local file used for in-progress download
+        self.remote_encoding = None   # the encoding of the remote file
+        self.enc_is_identity = None   # whether the remote encoding is identity
+        self.decoder = None           # saved decoder from the HTTPResponse
+        self.resolve_basename = None  # caller-supplied resolver (input)
+        self._make_part_file = None   # part_file supplier
 
     def set_part_file_supplier(self, value):
         self._make_part_file = value
@@ -462,6 +471,21 @@ def process_response(url, hstat, doctype, logger, retry_counter, resp):
 
     hstat.bytes_read = hstat.restval
 
+    # Header-driven basename resolution + no-clobber short-circuit.
+    # Runs after the status/range checks but before init_part_file() so we can
+    # abort the body read entirely (via UErr.RETRUNNEEDED) if the resolved
+    # target already exists on disk.
+    if hstat.resolve_basename is not None and hstat.dest is not None:
+        resolved_basename = hstat.resolve_basename(
+            hstat.dest.name, url, resp.headers,
+        )
+        resolved_dest = hstat.dest.with_name(resolved_basename)
+        if resolved_dest != hstat.dest and resolved_dest.exists():
+            hstat.dest = resolved_dest
+            hstat.bytes_read = hstat.restval = 0
+            return UErr.RETRUNNEEDED, doctype
+        hstat.dest = resolved_dest
+
     assert resp.decoder is None
     if hstat.restval > 0:
         resp.decoder = hstat.decoder  # Resume the previous decoder state -- Content-Encoding is weird
@@ -673,7 +697,6 @@ def _retrieve_loop(
     dest_file: str,
     post_id: Optional[str],
     post_timestamp: Optional[float],
-    adjust_basename: Optional[Callable[[str, BinaryIO], str]],
     log: Callable[[LogLevel, str], None],
     use_dns_check: bool,
     use_internet_archive: bool,
@@ -689,13 +712,13 @@ def _retrieve_loop(
         raise WGUnreachableHostError(logger, url, 'Host {} is ignored.'.format(hostname))
 
     doctype = 0
-    dest_dirname, dest_basename = os.path.split(dest_file)
+    hstat.dest = Path(dest_file)
 
     if os.name == 'posix':  # Opening directories is a POSIX feature
-        hstat.dest_dir = opendir(dest_dirname, os.O_RDONLY)
+        hstat.dest_dir = opendir(hstat.dest.parent, os.O_RDONLY)
     hstat.set_part_file_supplier(functools.partial(
         lambda pfx, dir_: NamedTemporaryFile('wb', prefix=pfx, dir=dir_, delete=False),
-        '.{}.'.format(dest_basename), dest_dirname,
+        '.{}.'.format(hstat.dest.name), hstat.dest.parent,
     ))
 
     # THE loop
@@ -816,15 +839,6 @@ def _retrieve_loop(
                 tstamp = min(hstat.remote_time, post_timestamp)
             touch(pfname, tstamp, dir_fd=hstat.dest_dir)
 
-        # Adjust the new name
-        if adjust_basename is None:
-            new_dest_basename = dest_basename
-        else:
-            # Give adjust_basename a read-only file handle
-            pf = open(hstat.part_file.fileno(), 'rb', closefd=False)
-            pf.seek(0)
-            new_dest_basename = adjust_basename(dest_basename, pf)
-
         # Sync the inode
         fsync(hstat.part_file)
         try:
@@ -833,11 +847,10 @@ def _retrieve_loop(
             hstat.part_file = None
 
         # Move to final destination
-        new_dest = os.path.join(dest_dirname, new_dest_basename)
         if os.rename not in os.supports_dir_fd:
-            os.replace(pfname, new_dest)
+            os.replace(pfname, hstat.dest)
         else:
-            os.replace(os.path.basename(pfname), new_dest_basename,
+            os.replace(os.path.basename(pfname), hstat.dest.name,
                        src_dir_fd=hstat.dest_dir, dst_dir_fd=hstat.dest_dir)
 
         return
@@ -870,16 +883,21 @@ def urlopen(url, use_dns_check: bool, headers: Optional[Dict[str, str]] = None, 
 
 # This functor is the primary API of this module.
 class WgetRetrieveWrapper:
-    def __init__(self, log: Callable[[LogLevel, str], None], options: Namespace):
+    def __init__(
+        self, log: Callable[[LogLevel, str], None], options: Namespace,
+        resolve_basename: Optional[ResolveBasename] = None,
+    ):
         self.log = log
         self.options = options
+        self.resolve_basename = resolve_basename
 
-    def __call__(self, url, file, post_id=None, post_timestamp=None, adjust_basename=None):
+    def __call__(self, url, file, post_id=None, post_timestamp=None):
         hstat = HttpStat()
+        hstat.resolve_basename = self.resolve_basename
         try:
             _retrieve_loop(
-                hstat, url, file, post_id, post_timestamp, adjust_basename, self.log,
-                use_dns_check=self.options.use_dns_check, use_internet_archive=self.options.internet_archive,
+                hstat, url, file, post_id, post_timestamp, self.log, use_dns_check=self.options.use_dns_check,
+                use_internet_archive=self.options.internet_archive,
                 use_server_timestamps=self.options.use_server_timestamps,
             )
         finally:
