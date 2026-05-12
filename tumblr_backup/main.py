@@ -1642,7 +1642,7 @@ class TumblrPost:
             append_try('source', '<p>%s</p>')
 
         elif self.typ == 'video':
-            if src := maybe_try_get_media_url_video(post['video_url'] if post['video_type'] == 'tumblr' else None):
+            if src := maybe_try_get_media_url_video(post.get('video_url') if post['video_type'] == 'tumblr' else None):
                 append('<p><video controls><source src="%s" type=video/mp4>%s<br>\n<a href="%s">%s</a></video></p>' % (
                     src, 'Your browser does not support the video element.', src, 'Video file',
                 ))
