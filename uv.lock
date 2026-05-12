@@ -951,7 +951,7 @@ wheels = [
 
 [[package]]
 name = "tumblr-backup"
-version = "1.6.5.dev0"
+version = "1.6.6.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
