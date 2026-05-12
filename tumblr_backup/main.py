@@ -1570,11 +1570,8 @@ class TumblrPost:
         def append(s, fmt='%s'):
             content.append(fmt % s)
 
-        def get_try(elt) -> Any | Literal['']:
-            return post.get(elt, '')
-
         def append_try(elt, fmt='%s'):
-            elt = get_try(elt)
+            elt = post.get(elt)
             if elt:
                 if self.options.save_images:
                     elt = re.sub(r"""(?i)(<img\s(?:[^>]*\s)?src\s*=\s*["'])(.*?)(["'][^>]*>)""",
@@ -1613,11 +1610,11 @@ class TumblrPost:
             return src
 
         if self.typ == 'text':
-            self.title = get_try('title')
+            self.title = post.get('title', '')
             append_try('body')
 
         elif self.typ == 'photo':
-            url = get_try('link_url')
+            url = post.get('link_url')
             is_photoset = len(post['photos']) > 1
             for offset, p in enumerate(post['photos'], start=1):
                 o = p['alt_sizes'][0] if 'alt_sizes' in p else p['original_size']
@@ -1647,7 +1644,7 @@ class TumblrPost:
                     src, 'Your browser does not support the video element.', src, 'Video file',
                 ))
             else:
-                player = get_try('player')
+                player = post.get('player')
                 if player:
                     append(player[-1]['embed_code'])
                 else:
@@ -1662,13 +1659,13 @@ class TumblrPost:
                 ))
 
             src = None
-            audio_url = get_try('audio_url') or get_try('audio_source_url')
-            if self.options.save_audio:
+            audio_url = post.get('audio_url') or post.get('audio_source_url')
+            if self.options.save_audio and audio_url:
                 if post['audio_type'] == 'tumblr':
                     src = try_get_media_url_tumblr_audio(audio_url)
                 elif post['audio_type'] == 'soundcloud':
                     src = self.get_media_url(audio_url, '.mp3')
-            player = get_try('player')
+            player = post.get('player')
             if src:
                 make_player(src)
             elif player:
@@ -1682,7 +1679,7 @@ class TumblrPost:
             append_try('answer')
 
         elif self.typ == 'chat':
-            self.title = get_try('title')
+            self.title = post.get('title', '')
             append(
                 '<br>\n'.join('%(label)s %(phrase)s' % d for d in post['dialogue']),
                 '<p>%s</p>',
