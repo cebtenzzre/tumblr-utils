@@ -1805,7 +1805,7 @@ class TumblrPost:
                 result = result['entries'][0]  # handle playlist
             media_filename = ydl.prepare_filename(result)
         except Exception:
-            return ''
+            return None
 
         # Prevent racing of existence check and download
         with acquire_media_download(media_filename, check_exists=partial(os.path.isfile, media_filename)) as should_download:
@@ -1814,7 +1814,7 @@ class TumblrPost:
                 try:
                     ydl.extract_info(youtube_url, download=True)
                 except Exception:
-                    return ''
+                    return None
 
         return quote(urlpathjoin(self.media_url, split(media_filename)[1]))
 
