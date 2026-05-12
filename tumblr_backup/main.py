@@ -1816,8 +1816,6 @@ class TumblrPost:
         return quote(urlpathjoin(self.media_url, split(media_filename)[1]))
 
     def get_media_url(self, media_url, extension):
-        if not media_url:
-            return ''
         saved_name = self.download_media(media_url, extension=extension)
         if saved_name is not None:
             return quote(urlpathjoin(self.media_url, saved_name))
