@@ -47,13 +47,15 @@ from typing import (
     TypedDict,
     cast,
 )
-from urllib.parse import quote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 from xml.sax.saxutils import escape, quoteattr
 
 # third-party modules
 import colorama
 import platformdirs
 import requests
+from pydantic import ValidationError
+from requests_oauthlib import OAuth1, OAuth1Session
 
 # internal modules
 from .is_reblog import post_is_reblog
@@ -68,6 +70,7 @@ from .npf.models import (
 )
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
 from .filename import resolve_tumblr_basename, sanitize_filename
+from .oauth1 import OAuthCredentials
 from .util import (
     AsyncCallable,
     BS_PARSER,
@@ -165,7 +168,7 @@ except locale.Error:
     pass
 FILE_ENCODING = 'utf-8'
 
-PREV_MUST_MATCH_OPTIONS = ('likes', 'blosxom')
+PREV_MUST_MATCH_OPTIONS = ('likes', 'drafts', 'blosxom')
 MEDIA_PATH_OPTIONS = ('dirs', 'hostdirs', 'image_names')
 MUST_MATCH_OPTIONS = PREV_MUST_MATCH_OPTIONS + MEDIA_PATH_OPTIONS
 BACKUP_CHANGING_OPTIONS = (
@@ -291,18 +294,29 @@ def get_dotted_blogname(account: str) -> str:
     return account + '.tumblr.com'
 
 
-def get_api_url(account: str, *, likes: bool, dash: bool | None) -> str:
+def get_api_url(account: str, *, likes: bool, drafts: bool, dash: bool | None) -> str:
     """construct the tumblr API URL"""
     blog_name = account
     if any(c in account for c in '/\\') or account in ('.', '..'):
         raise ValueError(f'Invalid blog name: {account!r}')
     if '.' not in account and not dash:
         blog_name = get_dotted_blogname(account)
+    if drafts:
+        route = 'posts/draft'
+    elif likes:
+        route = 'likes'
+    else:
+        route = 'posts'
     return 'https://{base}/v2/blog/{blog_name}/{route}'.format(
         base="www.tumblr.com/api" if dash else "api.tumblr.com",
         blog_name=blog_name,
-        route="likes" if likes else "posts",
+        route=route,
     )
+
+
+def get_blog_info_url(account: str) -> str:
+    blog_name = get_dotted_blogname(account) if '.' not in account else account
+    return f'https://api.tumblr.com/v2/blog/{blog_name}/info'
 
 
 def parse_period_date(period):
@@ -340,6 +354,7 @@ class ApiParser:
     TRY_LIMIT = 2
     session: ClassVar[requests.Session | None] = None
     api_key: ClassVar[str | None] = None
+    oauth_auth: ClassVar[OAuth1 | None] = None
     _community_label_checked: ClassVar[bool] = False
 
     def __init__(self, tb: TumblrBackup, account: str, options: Namespace):
@@ -357,10 +372,15 @@ class ApiParser:
         cls, api_key: str, no_ssl_verify: bool, user_agent: str, cookiefile: str | os.PathLike[str],
     ) -> None:
         cls.api_key = api_key
+        cls.oauth_auth = None
         cls.session = make_requests_session(
             requests.Session, HTTP_RETRY, HTTP_TIMEOUT,
             not no_ssl_verify, user_agent, cookiefile,
         )
+
+    @classmethod
+    def setup_oauth(cls, creds: OAuthCredentials) -> None:
+        cls.oauth_auth = creds.to_auth()
 
     def _check_community_labels(self) -> None:
         """Check user's community label settings and warn if content will be blocked."""
@@ -428,10 +448,28 @@ class ApiParser:
                 r['blog']['posts'] = len(self.prev_resps)
             return r
 
+        if self.options.drafts:
+            return self._fetch_blog_info()
         return self.apiparse(1)
 
+    def _fetch_blog_info(self) -> JSONDict | None:
+        assert self.api_key is not None
+        url = get_blog_info_url(self.account)
+        try:
+            doc, status, reason = self._get_resp(url, {'api_key': self.api_key}, {})
+        except (OSError, HTTPError) as e:
+            logger.error('[FATAL] Error retrieving blog info: {!r}\n'.format(e))
+            return None
+        if not 200 <= status < 300:
+            logger.error('[FATAL] Non-OK blog info response: HTTP {} {}\n'.format(status, reason))
+            return None
+        if doc is None:
+            return None
+        return doc.get('response')
+
     def apiparse(
-        self, count, start=0, before=None, ident=None, next_query: dict[str, Any] | None = None
+        self, count, start=0, before=None, ident=None, next_query: dict[str, Any] | None = None,
+        before_id: int | None = None,
     ) -> JSONDict | None:
         assert self.api_key is not None
 
@@ -465,6 +503,32 @@ class ApiParser:
                 posts = list(itertools.islice(it, None, count))
             return {get_posts_key(self.options.likes): posts}
 
+        if self.options.drafts:
+            assert self.oauth_auth is not None
+            params: dict[str, Any] = {}
+            if before_id is not None and before_id > 0:
+                params['before_id'] = before_id
+            base = get_api_url(self.account, likes=False, drafts=True, dash=False)
+            headers: dict[str, str] = {}
+            try:
+                doc, status, reason = self._get_resp(base, params, headers, oauth=True)
+            except (OSError, HTTPError) as e:
+                logger.error('URL is {}?{}\n[FATAL] Error retrieving API repsonse: {!r}\n'.format(
+                    base, urlencode(params), e,
+                ))
+                return None
+            if not 200 <= status < 300:
+                logger.error('URL is {}?{}\n[FATAL] {} API repsonse: HTTP {} {}\n{}'.format(
+                    base, urlencode(params),
+                    'Error retrieving' if doc is None else 'Non-OK',
+                    status, reason,
+                    '' if doc is None else '{}\n'.format(doc),
+                ))
+                return None
+            if doc is None:
+                return None
+            return doc.get('response')
+
         params = {'api_key': self.api_key, 'limit': count, 'reblog_info': 'true'}
         if ident is not None:
             params['id'] = ident
@@ -476,7 +540,7 @@ class ApiParser:
         elif start > 0:
             params['offset'] = start
 
-        base = get_api_url(self.account, likes=self.options.likes, dash=self.dashboard_only_blog)
+        base = get_api_url(self.account, likes=self.options.likes, drafts=False, dash=self.dashboard_only_blog)
         headers = {}
         if self.dashboard_only_blog:
             # dashboard-only blogs are authenticated with a bearer token
@@ -540,12 +604,13 @@ class ApiParser:
                     f.seek(0)
                     logger.error('{}: {}\n{!r}\n'.format(e.__class__.__name__, e, f.read()))
 
-    def _get_resp(self, base, params, headers):
+    def _get_resp(self, base, params, headers, *, oauth: bool = False):
         assert self.session is not None
+        auth = self.oauth_auth if oauth else None
         try_count = 0
         while True:
             try:
-                with self.session.get(base, params=params, headers=headers) as resp:
+                with self.session.get(base, params=params, headers=headers, auth=auth) as resp:
                     try_count += 1
                     doc = None
                     ctype = resp.headers.get('Content-Type')
@@ -1262,7 +1327,7 @@ class TumblrBackup:
         else:
             posts_key = 'posts'
             blog = resp.get('blog', {})
-            count_estimate = blog.get('posts')
+            count_estimate = None if self.options.drafts else blog.get('posts')
         self.title = escape(blog.get('title', account))
         self.subtitle = blog.get('description', '')
 
@@ -1413,14 +1478,20 @@ class TumblrBackup:
             # Get the JSON entries from the API, which we can only do for MAX_POSTS posts at once.
             # Posts "arrive" in reverse chronological order. Post #0 is the most recent one.
             i = self.options.skip
+            draft_before_id = 0
 
             next_query: dict[str, Any] | None = None
             while True:
-                # find the upper bound
-                logger.status('Getting {}posts {} to {}{}\r'.format(
-                    'liked ' if self.options.likes else '', i, i + MAX_POSTS - 1,
-                    '' if count_estimate is None else ' (of {} expected)'.format(count_estimate),
-                ))
+                if self.options.drafts:
+                    logger.status('Getting drafts{}\r'.format(
+                        '' if draft_before_id == 0 else ' (before id {})'.format(draft_before_id),
+                    ))
+                else:
+                    # find the upper bound
+                    logger.status('Getting {}posts {} to {}{}\r'.format(
+                        'liked ' if self.options.likes else '', i, i + MAX_POSTS - 1,
+                        '' if count_estimate is None else ' (of {} expected)'.format(count_estimate),
+                    ))
 
                 if self.options.idents is not None:
                     try:
@@ -1431,7 +1502,10 @@ class TumblrBackup:
                         break
 
                 with multicond:
-                    api_thread.put(MAX_POSTS, i, before, next_ident, next_query)
+                    if self.options.drafts:
+                        api_thread.put(0, before_id=draft_before_id)
+                    else:
+                        api_thread.put(MAX_POSTS, i, before, next_ident, next_query)
 
                     while not api_thread.response.qsize():
                         tumblr_unreachable.check(release=True)
@@ -1457,6 +1531,10 @@ class TumblrBackup:
 
                 if next_ident is not None:
                     i += 1  # one post at a time
+                    continue
+
+                if self.options.drafts:
+                    draft_before_id = int(posts[-1]['id'])
                     continue
 
                 if prev_archive is None:
@@ -1492,8 +1570,9 @@ class TumblrBackup:
 
         logger.status(None)
         skipped_msg = (', {} did not match filter'.format(self.filter_skipped)) if self.filter_skipped else ''
+        post_kind = 'draft ' if self.options.drafts else ('liked ' if self.options.likes else '')
         logger.warn(
-            '{} {}posts backed up{}\n'.format(self.post_count, 'liked ' if self.options.likes else '', skipped_msg),
+            '{} {}posts backed up{}\n'.format(self.post_count, post_kind, skipped_msg),
             account=True,
         )
         self.total_count += self.post_count
@@ -1932,7 +2011,7 @@ class TumblrPost:
 
     def get_post(self):
         """returns this post in HTML"""
-        typ = ('liked-' if self.options.likes else '') + self.typ
+        typ = ('draft-' if self.options.drafts else ('liked-' if self.options.likes else '')) + self.typ
         post = self.post_header + '<article class=%s id=p-%s>\n' % (typ, self.ident)
         post += '<header>\n'
         if self.options.likes:
@@ -2347,6 +2426,110 @@ class IdFileCallback(argparse.Action):
             ))
 
 
+def _wait_for_oauth_callback(port: int) -> str | None:
+    """Start a one-shot HTTP server and wait for the OAuth callback with the verifier."""
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    verifier: str | None = None
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            nonlocal verifier
+            qs = parse_qs(urlparse(self.path).query)
+            verifier = qs.get('oauth_verifier', [None])[0]
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            if verifier:
+                self.wfile.write(b'<h1>Authorization complete!</h1><p>You can close this tab.</p>')
+            else:
+                self.wfile.write(b'<h1>Authorization failed.</h1><p>No verifier received.</p>')
+
+        def log_message(self, format, *args):
+            pass  # suppress request logging
+
+    server = HTTPServer(('127.0.0.1', port), Handler)
+    server.timeout = 120
+    server.handle_request()
+    server.server_close()
+    return verifier
+
+
+def setup_oauth_interactive(config_file: Path) -> int:
+    """Walk the user through OAuth 1.0a setup — paste-all-four or browser flow."""
+    print('This will set up OAuth credentials for features that need them (e.g. --drafts).')
+    print()
+    print('You need a Tumblr app. Create one at https://www.tumblr.com/oauth/apps if needed.')
+    print('(Tip: click "Explore API" on that page to get all four values without a browser flow.)')
+    print()
+    consumer_key = input('Consumer key (OAuth Consumer Key): ').strip()
+    consumer_secret = input('Consumer secret (Secret Key): ').strip()
+    if not consumer_key or not consumer_secret:
+        print('Both the consumer key and secret are required.', file=sys.stderr)
+        return 1
+
+    print()
+    print('If you already have your OAuth token and secret, paste them now.')
+    print('Otherwise, leave them blank to authorize via browser.')
+    token = input('OAuth token (blank to use browser): ').strip()
+    token_secret = input('OAuth token secret (blank to use browser): ').strip()
+
+    if token and token_secret:
+        return update_config(config_file, {
+            'oauth_consumer_key': consumer_key,
+            'oauth_consumer_secret': consumer_secret,
+            'oauth_token': token,
+            'oauth_token_secret': token_secret,
+        }, 'OAuth credentials saved.')
+
+    return _setup_oauth_browser(config_file, consumer_key, consumer_secret)
+
+
+def _setup_oauth_browser(config_file: Path, consumer_key: str, consumer_secret: str) -> int:
+    """Complete the OAuth 1.0a three-legged flow via a localhost callback server."""
+    import socket
+    import webbrowser
+
+    # Find a free port for the callback server
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        port = s.getsockname()[1]
+    callback_url = f'http://127.0.0.1:{port}/callback'
+
+    try:
+        oauth = OAuth1Session(consumer_key, client_secret=consumer_secret, callback_uri=callback_url)
+        oauth.fetch_request_token('https://www.tumblr.com/oauth/request_token')
+    except Exception as e:
+        print(f'Failed to get request token: {e}', file=sys.stderr)
+        print('Check that your consumer key and secret are correct.', file=sys.stderr)
+        return 1
+
+    auth_url = oauth.authorization_url('https://www.tumblr.com/oauth/authorize')
+    print()
+    print('Opening your browser to authorize the app...')
+    if not webbrowser.open(auth_url):
+        print(f'Could not open browser. Open this URL manually:\n  {auth_url}')
+    print('Waiting for authorization (timeout: 2 minutes)...')
+
+    verifier = _wait_for_oauth_callback(port)
+    if not verifier:
+        print('No verifier received. Did you click Allow?', file=sys.stderr)
+        return 1
+
+    try:
+        tokens = oauth.fetch_access_token('https://www.tumblr.com/oauth/access_token', verifier=verifier)
+    except Exception as e:
+        print(f'Failed to get access token: {e}', file=sys.stderr)
+        return 1
+
+    return update_config(config_file, {
+        'oauth_consumer_key': consumer_key,
+        'oauth_consumer_secret': consumer_secret,
+        'oauth_token': tokens['oauth_token'],
+        'oauth_token_secret': tokens['oauth_token_secret'],
+    }, 'OAuth credentials saved.')
+
+
 def update_config(config_file: Path, updates: dict[str, Any], success_msg: str | None = None) -> int:
     """Update config file with given key-value pairs."""
     with os.fdopen(os.open(config_file, os.O_RDWR | os.O_CREAT, 0o644), 'r+') as f:
@@ -2434,6 +2617,12 @@ def main():
         api_key, = args
         return update_config(config_file, {'oauth_consumer_key': api_key})
 
+    if '--setup-oauth' in sys.argv[1:]:
+        if len(sys.argv[1:]) != 1:
+            print(f'{Path(sys.argv[0]).name}: invalid usage', file=sys.stderr)
+            return 1
+        return setup_oauth_interactive(config_file)
+
     if '--disable-notice' in sys.argv[1:]:
         if len(sys.argv[1:]) != 1:
             print(f'{Path(sys.argv[0]).name}: invalid usage', file=sys.stderr)
@@ -2451,6 +2640,7 @@ def main():
     parser.add_argument('-q', '--quiet', action='store_true', help='suppress progress messages')
     postexist_group.add_argument('-i', '--incremental', action='store_true', help='incremental backup mode')
     parser.add_argument('-l', '--likes', action='store_true', help="save a blog's likes, not its posts")
+    parser.add_argument('-d', '--drafts', action='store_true', help="save a blog's drafts (requires OAuth; see config)")
     parser.add_argument('-k', '--skip-images', action='store_false', dest='save_images',
                         help='do not save images; link to Tumblr instead')
     parser.add_argument('--save-video', action='store_true', help='save all video files')
@@ -2579,6 +2769,17 @@ def main():
         parser.error('--copy-notes requires --prev-archives or --reuse-json')
     if options.idents is not None and options.likes:
         parser.error('--id-file not implemented for likes')
+    if options.drafts:
+        if options.likes:
+            parser.error('--likes cannot be used with --drafts')
+        if options.incremental or options.auto is not None or options.resume:
+            parser.error('--drafts cannot be used with --incremental, --auto, or --continue')
+        if options.reuse_json:
+            parser.error('--drafts cannot be used with --reuse-json')
+        if options.idents is not None:
+            parser.error('--id-file not implemented for drafts')
+        if options.json_info:
+            parser.error('--json-info is not supported with --drafts')
     if options.copy_notes is None:
         # Default to True if we may regenerate posts
         options.copy_notes = options.reuse_json and not options.no_post_clobber
@@ -2591,20 +2792,40 @@ def main():
     try:
         with open(config_file) as f:
             config = json.load(f)
-            api_key = config['oauth_consumer_key']
-    except (FileNotFoundError, KeyError):
-        msg = f"""\
-            API key not set. To use tumblr-backup:
-            1. Go to https://www.tumblr.com/oauth/apps and create an app if you don't have one already.
-            2. Copy the "OAuth Consumer Key" from the app you created.
-            3. Run `{Path(sys.argv[0]).name} --set-api-key API_KEY`, where API_KEY is the key that you just copied."""
-        print(textwrap.dedent(msg), file=sys.stderr)
-        return 1
+    except (FileNotFoundError, json.JSONDecodeError):
+        config = {}
+
+    prog = Path(sys.argv[0]).name
+
+    if options.drafts:
+        try:
+            creds = OAuthCredentials.model_validate(config)
+        except ValidationError:
+            msg = f"""\
+                OAuth credentials required for --drafts.
+                1. Create an app at https://www.tumblr.com/oauth/apps if needed.
+                2. Run `{prog} --setup-oauth` and follow the prompts."""
+            print(textwrap.dedent(msg), file=sys.stderr)
+            return 1
+        api_key = creds.consumer_key
+    else:
+        api_key = config.get('oauth_consumer_key')
+        if not api_key:
+            msg = f"""\
+                API key not set. To use tumblr-backup:
+                1. Go to https://www.tumblr.com/oauth/apps and create an app if you don't have one already.
+                2. Copy the "OAuth Consumer Key" from the app you created.
+                3. Run `{prog} --set-api-key API_KEY`, where API_KEY is the key that you just copied."""
+            print(textwrap.dedent(msg), file=sys.stderr)
+            return 1
 
     wget_retrieve = WgetRetrieveWrapper(logger.log, options, resolve_basename=resolve_tumblr_basename)
     setup_wget(not options.no_ssl_verify, options.user_agent)
 
     ApiParser.setup(api_key, options.no_ssl_verify, options.user_agent, options.cookiefile)
+
+    if options.drafts:
+        ApiParser.setup_oauth(creds)
 
     if sys.stderr.isatty() and not config.get('disable_discord_notice', False):
         maybe_show_notice()
