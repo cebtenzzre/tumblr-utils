@@ -15,7 +15,9 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   -O OUTDIR, --outdir OUTDIR
-                        set the output directory (default: blog-name)
+                        set the output directory (default: <blog-name>). If set,
+                        blog sub-folders are added automatically if multiple
+                        blogs are passed.
   -D, --dirs            save each post in its own folder
   -q, --quiet           suppress progress messages
   -i, --incremental     incremental backup mode
