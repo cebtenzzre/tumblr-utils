@@ -268,12 +268,6 @@ def fsync(fd):
     os.fsync(fd)
 
 
-def fdatasync(fd):
-    if hasattr(os, 'fdatasync'):
-        return os.fdatasync(fd)
-    fsync(fd)
-
-
 # Minimal implementation of a sum of mutable sequences
 class MultiSeqProxy:
     def __init__(self, subseqs):

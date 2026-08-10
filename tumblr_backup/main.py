@@ -74,7 +74,6 @@ from .util import (
     LockedQueue,
     copyfile,
     enospc,
-    fdatasync,
     fsync,
     have_module,
     is_tumblr_reachable,
@@ -1297,17 +1296,17 @@ class TumblrBackup:
             if not (account in self.failed_blogs or os.path.exists(path_to('.complete'))):
                 # Make .complete file
                 sf: int | None
-                if os.name == 'posix':  # Opening directories and fdatasync are POSIX features
+                if os.name == 'posix':  # can only sync directory on POSIX
                     sf = opendir(save_folder, os.O_RDONLY)
                 else:
                     sf = None
                 try:
                     if sf is not None:
-                        fdatasync(sf)
+                        fsync(sf)
                     with open(open_file(lambda f: f, ('.complete',)), 'wb') as f:
                         fsync(f)
                     if sf is not None:
-                        fdatasync(sf)
+                        fsync(sf)
                 finally:
                     if sf is not None:
                         os.close(sf)
