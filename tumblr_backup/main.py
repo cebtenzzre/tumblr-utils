@@ -1063,11 +1063,17 @@ class TumblrBackup:
         return int(datetime.strptime(cast(str, postdate), '%Y-%m-%dT%H:%M:%SZ').timestamp())
 
     def process_existing_backup(self, account, prev_archive):
-        complete_backup = os.path.exists(path_to('.complete'))
-        try:
-            with open(path_to('.first_run_options'), encoding=FILE_ENCODING) as f:
-                first_run_options = json.load(f)
-        except FileNotFoundError:
+        uses_archive_markers = not self.options.blosxom
+        if uses_archive_markers:
+            complete_backup = os.path.exists(path_to('.complete'))
+            try:
+                with open(path_to('.first_run_options'), encoding=FILE_ENCODING) as f:
+                    first_run_options = json.load(f)
+            except FileNotFoundError:
+                first_run_options = None
+        else:
+            # Blosxom writes independent post files, not an indexed archive.
+            complete_backup = False
             first_run_options = None
 
         @dataclass(frozen=True)
@@ -1128,7 +1134,7 @@ class TumblrBackup:
                         account, pa_opts.this(mustmatchdiff), pa_opts.first(mustmatchdiff)))
 
         oldest_tstamp = None
-        if self.options.resume or not complete_backup:
+        if self.options.resume or (uses_archive_markers and not complete_backup):
             # Read every post to find the oldest timestamp already saved
             post_glob = list(find_post_files(self.options.dirs))
             if not self.options.resume:
@@ -1150,6 +1156,7 @@ class TumblrBackup:
 
         write_fro = False
         if backdiff_nondef is not None:
+            assert first_run_options is not None
             # Load saved options, unless they were overridden with --ignore-diffopt
             for opt in BACKUP_CHANGING_OPTIONS:
                 if opt not in backdiff_nondef:
@@ -1158,7 +1165,7 @@ class TumblrBackup:
             # Load original options
             for opt in BACKUP_CHANGING_OPTIONS:
                 setattr(self.options, opt, self.orig_options[opt])
-            if first_run_options is None and not (complete_backup or post_glob):
+            if uses_archive_markers and first_run_options is None and not (complete_backup or post_glob):
                 # Presumably this is the initial backup of this blog
                 write_fro = True
 
