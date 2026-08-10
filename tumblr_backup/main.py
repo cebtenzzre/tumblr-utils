@@ -5,7 +5,6 @@ import argparse
 import calendar
 import contextlib
 import errno
-from contextlib import contextmanager
 import hashlib
 import http.client
 import importlib.metadata
@@ -25,6 +24,7 @@ import traceback
 from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import partial
@@ -54,9 +54,12 @@ from xml.sax.saxutils import escape, quoteattr
 import colorama
 import platformdirs
 import requests
+from bs4 import BeautifulSoup, Tag
 
+from .filename import resolve_tumblr_basename, sanitize_filename
 # internal modules
 from .is_reblog import post_is_reblog
+from .logging import LogLevel, logger
 from .npf.models import (
     AudioBlock,
     ContentBlockList,
@@ -67,10 +70,9 @@ from .npf.models import (
     _content_block_list_adapter,
 )
 from .npf.render import NpfRenderer, QuickJsNpfRenderer, create_npf_renderer
-from .filename import resolve_tumblr_basename, sanitize_filename
 from .util import (
-    AsyncCallable,
     BS_PARSER,
+    AsyncCallable,
     LockedQueue,
     copyfile,
     enospc,
@@ -80,14 +82,11 @@ from .util import (
     main_thread_lock,
     make_requests_session,
     multicond,
-    tumblr_unreachable,
     opendir,
     to_bytes,
+    tumblr_unreachable,
 )
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
-from .logging import LogLevel, logger
-
-from bs4 import BeautifulSoup, Tag
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias

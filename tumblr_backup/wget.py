@@ -11,22 +11,40 @@ from argparse import Namespace
 from collections import OrderedDict
 from email.utils import mktime_tz, parsedate_tz
 from enum import Enum
-from http.client import (HTTPConnection as _HTTPConnection, HTTPMessage as _HttplibHTTPMessage,
-                         HTTPResponse as _HttplibHTTPResponse, ResponseNotReady)
+from http.client import (
+    HTTPConnection as _HTTPConnection,
+    HTTPMessage as _HttplibHTTPMessage,
+    HTTPResponse as _HttplibHTTPResponse,
+    ResponseNotReady,
+)
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import IO, TYPE_CHECKING, Any, BinaryIO, Callable, Dict, Iterable, Mapping, Optional, Protocol, Set
 from urllib.parse import urljoin, urlsplit
 
-from urllib3 import (BaseHTTPResponse, HTTPConnectionPool, HTTPHeaderDict, HTTPResponse, HTTPSConnectionPool,
-                     PoolManager, Retry as Retry, Timeout, make_headers)
+from urllib3 import (
+    BaseHTTPResponse,
+    HTTPConnectionPool,
+    HTTPHeaderDict,
+    HTTPResponse,
+    HTTPSConnectionPool,
+    PoolManager,
+    Retry as Retry,
+    Timeout,
+    make_headers,
+)
 from urllib3.connection import HTTPConnection, HTTPSConnection, _url_from_connection  # noqa: WPS450
-from urllib3.exceptions import (ConnectTimeoutError, HeaderParsingError, HTTPError as HTTPError, InsecureRequestWarning,
-                                MaxRetryError)
+from urllib3.exceptions import (
+    ConnectTimeoutError,
+    HeaderParsingError,
+    HTTPError as HTTPError,
+    InsecureRequestWarning,
+    MaxRetryError,
+)
 from urllib3.util.response import assert_header_parsing
 
 from .logging import LogLevel
-from .util import enospc, fsync, is_tumblr_reachable, tumblr_unreachable, opendir, setup_urllib3_ssl, try_unlink
+from .util import enospc, fsync, is_tumblr_reachable, opendir, setup_urllib3_ssl, try_unlink, tumblr_unreachable
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias

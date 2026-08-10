@@ -1,5 +1,6 @@
-from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter, model_validator
 from typing import Annotated, Any, ClassVar, Literal
+
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter, model_validator
 
 __all__ = [
     'AppAttribution',

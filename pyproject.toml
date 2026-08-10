@@ -113,6 +113,8 @@ disable_error_code = ['import-untyped']
 src_paths = ['tumblr_backup']
 line_length = 120
 combine_as_imports = true
+multi_line_output = 3
+include_trailing_comma = true
 
 [dependency-groups]
 dev = [
