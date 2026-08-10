@@ -80,7 +80,7 @@ tumblr-backup = "tumblr_backup.main:main"
 tb-login = "tumblr_backup.login:main"
 
 [build-system]
-requires = ["setuptools>=43.0.0", "wheel"]
+requires = ["setuptools>=79.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
