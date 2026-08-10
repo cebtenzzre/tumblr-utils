@@ -1,6 +1,4 @@
 # builtin modules
-from __future__ import annotations
-
 import argparse
 import calendar
 import contextlib
@@ -44,6 +42,7 @@ from typing import (
     Literal,
     NamedTuple,
     TextIO,
+    TypeAlias,
     TypedDict,
     cast,
 )
@@ -88,10 +87,7 @@ from .util import (
 )
 from .wget import HTTP_TIMEOUT, HTTPError, Retry, WGError, WgetRetrieveWrapper, setup_wget, touch, urlopen
 
-if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
-
-JSONDict: TypeAlias = 'dict[str, Any]'
+JSONDict: TypeAlias = dict[str, Any]
 
 # extra optional packages
 try:
@@ -340,7 +336,7 @@ class ApiParser:
     api_key: ClassVar[str | None] = None
     _community_label_checked: ClassVar[bool] = False
 
-    def __init__(self, tb: TumblrBackup, account: str, options: Namespace):
+    def __init__(self, tb: 'TumblrBackup', account: str, options: Namespace):
         self.account = account
         self.options = options
         self.prev_resps: list[str] | None = None
@@ -811,10 +807,10 @@ def import_youtube_dl():
 
 
 class Index:
-    index: defaultdict[int, defaultdict[int, list[LocalPost]]]
+    index: defaultdict[int, defaultdict[int, list['LocalPost']]]
 
     def __init__(
-        self, blog: TumblrBackup, posts_per_page: int, dirs: bool, reverse_month: bool, reverse_index: bool,
+        self, blog: 'TumblrBackup', posts_per_page: int, dirs: bool, reverse_month: bool, reverse_index: bool,
         tag_index: bool, body_class: str = 'index',
     ):
         self.blog = blog
@@ -914,7 +910,7 @@ class Index:
 
 class TagIndex(Index):
     def __init__(
-        self, name: str, blog: TumblrBackup, posts_per_page: int, dirs: bool, reverse_month: bool, reverse_index: bool,
+        self, name: str, blog: 'TumblrBackup', posts_per_page: int, dirs: bool, reverse_month: bool, reverse_index: bool,
         tag_index: bool,
     ):
         super().__init__(blog, posts_per_page, dirs=dirs, reverse_month=reverse_month, reverse_index=reverse_index,
@@ -924,7 +920,7 @@ class TagIndex(Index):
 
 class Indices:
     def __init__(
-        self, blog: TumblrBackup, posts_per_page: int, dirs: bool, reverse_month: bool, reverse_index: bool,
+        self, blog: 'TumblrBackup', posts_per_page: int, dirs: bool, reverse_month: bool, reverse_index: bool,
         tag_index: bool,
     ):
         self.blog = blog

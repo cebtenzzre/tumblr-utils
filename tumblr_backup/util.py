@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import errno
 import os
 import queue
@@ -12,7 +10,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from http.cookiejar import MozillaCookieJar
 from importlib.machinery import PathFinder
-from typing import TYPE_CHECKING, Any, Deque, Final, Generic, Literal, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Deque, Final, Generic, Literal, Sequence, TypeAlias, TypeVar, cast
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -24,11 +22,10 @@ if sys.platform == 'darwin':
     import fcntl
 
 if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
     swt_base: TypeAlias = requests.Session
 
     class Condition(threading.Condition):
-        _waiters: NotifierWaiters
+        _waiters: 'NotifierWaiters'
 
 
 def _pick_bs_parser() -> Literal['lxml', 'html.parser']:
@@ -120,7 +117,7 @@ class WaitOnMainThread(ABC):
     cond: threading.Condition
     flag: bool | None
 
-    def __init__(self, lock: threading.Lock | threading.RLock):
+    def __init__(self, lock: 'threading.Lock | threading.RLock'):
         self.cond = threading.Condition(lock)
         self.flag = False
 
@@ -377,7 +374,7 @@ def lock_acquire_restore(lock, state):
         lock.acquire()  # Ignore saved state
 
 
-ACParams: TypeAlias = 'tuple[tuple[Any, ...], dict[str, Any]]'  # (args, kwargs)
+ACParams: TypeAlias = tuple[tuple[Any, ...], dict[str, Any]]  # (args, kwargs)
 
 
 class AsyncCallable:

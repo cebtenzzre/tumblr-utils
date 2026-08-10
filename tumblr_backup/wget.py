@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import errno
 import functools
 import itertools
@@ -19,7 +17,7 @@ from http.client import (
 )
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import IO, TYPE_CHECKING, Any, BinaryIO, Callable, Dict, Iterable, Mapping, Optional, Protocol, Set
+from typing import IO, Any, BinaryIO, Callable, Dict, Iterable, Mapping, Optional, Protocol, Set, TypeAlias
 from urllib.parse import urljoin, urlsplit
 
 from urllib3 import (
@@ -46,10 +44,7 @@ from urllib3.util.response import assert_header_parsing
 from .logging import LogLevel
 from .util import enospc, fsync, is_tumblr_reachable, opendir, setup_urllib3_ssl, try_unlink, tumblr_unreachable
 
-if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
-
-TYPE_BODY: TypeAlias = 'bytes | IO[Any] | Iterable[bytes] | str'
+TYPE_BODY: TypeAlias = bytes | IO[Any] | Iterable[bytes] | str
 
 setup_urllib3_ssl()
 
@@ -124,23 +119,23 @@ class WGHTTPResponse(HTTPResponse):
 
     def __init__(
         self,
-        body                   : TYPE_BODY                   = '',
-        headers                : Mapping[str, str] | None    = None,  # NB: cannot be bytes!
-        status                 : int                         = 0,
-        version                : int                         = 0,
-        version_string         : str                         = 'HTTP/?',
-        reason                 : str | None                  = None,
-        preload_content        : bool                        = True,
-        decode_content         : bool                        = True,
-        original_response      : _HttplibHTTPResponse | None = None,
-        pool                   : WGHTTPConnectionPool | None = None,
-        connection             : WGHTTPConnection     | None = None,
-        msg                    : _HttplibHTTPMessage  | None = None,
-        retries                : Retry | None                = None,
-        enforce_content_length : bool                        = False,  # NB: different default!
-        request_method         : str | None                  = None,
-        request_url            : str | None                  = None,
-        auto_close             : bool                        = True,
+        body                   : TYPE_BODY                     = '',
+        headers                : Mapping[str, str] | None      = None,  # NB: cannot be bytes!
+        status                 : int                           = 0,
+        version                : int                           = 0,
+        version_string         : str                           = 'HTTP/?',
+        reason                 : str | None                    = None,
+        preload_content        : bool                          = True,
+        decode_content         : bool                          = True,
+        original_response      :  _HttplibHTTPResponse | None  = None,
+        pool                   : 'WGHTTPConnectionPool | None' = None,
+        connection             : 'WGHTTPConnection     | None' = None,
+        msg                    :  _HttplibHTTPMessage  | None  = None,
+        retries                : Retry | None                  = None,
+        enforce_content_length : bool                          = False,  # NB: different default!
+        request_method         : str | None                    = None,
+        request_url            : str | None                    = None,
+        auto_close             : bool                          = True,
     ):
         # Copy original Content-Length for _init_length
         if not isinstance(headers, HTTPHeaderDict):
