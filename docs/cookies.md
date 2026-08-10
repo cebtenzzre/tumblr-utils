@@ -27,6 +27,10 @@ tumblr-backup --cookiefile cookies.txt blog-name
 If your cookies expire (you'll see login-related errors), just run `tb-login cookies.txt`
 again to refresh them.
 
+!!! note
+    Authentication via `Continue with Google` or `Continue with Apple` is not supported.\
+    Continue with [Option 2](#option-2-export-cookies-from-your-browser) to still get the correct cookies.
+
 ## Option 2: Export cookies from your browser
 
 If you'd rather not enter your password in the terminal, you can export cookies from a
