@@ -29,7 +29,8 @@ options:
                         --no-copy-notes)
   --notes-limit COUNT   limit requested notes to COUNT, per-post
   --cookiefile COOKIEFILE
-                        cookie file for youtube-dl, --save-notes, and dashboard-only blogs
+                        cookie file for youtube-dl, --save-notes, and dashboard-
+                        only blogs
   -j, --json            save the original JSON source
   -b, --blosxom         save the posts in blosxom format
   -r, --reverse-month   reverse the post order in the monthly archives

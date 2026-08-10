@@ -90,8 +90,8 @@ It can be reached through the "Tag index" link in the main index.
 
 If you want to use a custom CSS file, call it `custom.css`, put it in the backup
 folder and do a complete backup. Without a custom CSS file, tumblr-backup saves
-a default style sheet in `backup.css`. The blog's style sheet itself is always
-saved in `theme/style.css`.
+a minimal default style sheet in `backup.css`. The blog's style sheet itself is
+always saved in `theme/style.css`.
 
 It you want to override just a few default styles, create the file
 `override.css` in the backup folder. This file is included automatically by the
