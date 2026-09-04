@@ -42,11 +42,11 @@ from urllib3.exceptions import (
 from urllib3.util.response import assert_header_parsing
 
 from .logging import LogLevel
-from .util import enospc, fsync, is_tumblr_reachable, opendir, setup_urllib3_ssl, try_unlink, tumblr_unreachable
+from .util import enospc, fsync, is_tumblr_reachable, opendir, setup_ssl, try_unlink, tumblr_unreachable
 
 TYPE_BODY: TypeAlias = bytes | IO[Any] | Iterable[bytes] | str
 
-setup_urllib3_ssl()
+setup_ssl()
 
 HTTP_TIMEOUT = Timeout(90)
 # Always retry on 503 or 504, but never on connect, which is handled specially

@@ -210,12 +210,12 @@ class Enospc(WaitOnMainThread):
         input()
 
 
-# Set up ssl for urllib3. This should be called before using urllib3 or importing requests.
-def setup_urllib3_ssl():
+# Set up native certificate verification before creating urllib3 pools or Requests sessions.
+def setup_ssl():
     # Don't complain about missing SOCKS dependencies
     warnings.filterwarnings('ignore', category=DependencyWarning)
 
-    if sys.platform == 'darwin':
+    if sys.platform in ('darwin', 'win32'):
         import truststore
         truststore.inject_into_ssl()
 

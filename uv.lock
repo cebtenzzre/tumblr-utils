@@ -960,7 +960,7 @@ dependencies = [
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "requests" },
-    { name = "truststore", marker = "sys_platform == 'darwin'" },
+    { name = "truststore", marker = "sys_platform == 'darwin' or sys_platform == 'win32'" },
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
@@ -1025,7 +1025,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "quickjs", marker = "extra == 'dash'", specifier = ">=1.19.4,<2" },
     { name = "requests", specifier = ">=2.32.5,<3" },
-    { name = "truststore", marker = "sys_platform == 'darwin'", specifier = ">=0.10.4,<0.11" },
+    { name = "truststore", marker = "sys_platform == 'darwin' or sys_platform == 'win32'", specifier = ">=0.10.4,<0.11" },
     { name = "tumblr-backup", extras = ["all"], marker = "extra == 'dev'" },
     { name = "tumblr-backup", extras = ["bs4", "dash", "exif", "jq", "video"], marker = "extra == 'all'" },
     { name = "types-lxml", marker = "extra == 'dev'", specifier = ">=2025.8.25" },

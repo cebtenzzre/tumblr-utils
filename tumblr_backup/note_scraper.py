@@ -15,9 +15,9 @@ from urllib3 import Retry, Timeout
 from urllib3.exceptions import HTTPError, InsecureRequestWarning
 
 from .logging import LogLevel
-from .util import BS_PARSER, is_tumblr_reachable, make_requests_session, setup_urllib3_ssl, to_bytes
+from .util import BS_PARSER, is_tumblr_reachable, make_requests_session, setup_ssl, to_bytes
 
-setup_urllib3_ssl()
+setup_ssl()
 
 EXIT_SUCCESS = 0
 EXIT_SAFE_MODE = 2

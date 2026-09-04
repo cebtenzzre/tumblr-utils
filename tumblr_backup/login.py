@@ -5,6 +5,10 @@ from http.cookiejar import MozillaCookieJar
 
 import requests
 
+from .util import setup_ssl
+
+setup_ssl()
+
 
 def get_api_token(session):
     r = session.get('https://www.tumblr.com/login')
