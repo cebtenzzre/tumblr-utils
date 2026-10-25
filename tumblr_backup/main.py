@@ -856,11 +856,13 @@ class Index:
     def save_month(self, archives, index_dir, year, month, tm):
         posts = sorted(self.index[year][month], key=lambda x: x.date, reverse=self.reverse_month)
         posts_month = len(posts)
-        posts_page = self.posts_per_page if self.posts_per_page >= 1 else posts_month
+        posts_page = posts_month if self.posts_per_page == 0 else self.posts_per_page
 
         def pages_per_month(y, m):
+            if self.posts_per_page == 0:
+                return 1
             posts_m = len(self.index[y][m])
-            return posts_m // posts_page + bool(posts_m % posts_page)
+            return posts_m // self.posts_per_page + bool(posts_m % self.posts_per_page)
 
         def next_month(inc):
             i = archives.index((year, month))
